@@ -64,7 +64,7 @@
         <div class="invoice-title">
             <h2>Invoice</h2>
             <div class="invoice-number">{{ $transaction->invoice_number }}</div>
-            <div class="invoice-date">{{ $transaction->transaction_date->format('d MMMM Y') }}</div>
+            <div class="invoice-date">{{ $transaction->transaction_date->format('d F Y') }}</div>
         </div>
     </div>
 

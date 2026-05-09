@@ -4,8 +4,12 @@ use App\Http\Controllers\DocumentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect('/admin');
 });
+
+Route::get('/login', function () {
+    return redirect('/admin/login');
+})->name('login');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/transaction/{transaction}/invoice', [DocumentController::class, 'invoice'])

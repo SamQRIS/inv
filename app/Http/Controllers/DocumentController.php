@@ -7,6 +7,7 @@ use App\Models\Transaction;
 use App\Services\DiscountService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
+use App\Http\Controllers\Controller;
 
 class DocumentController extends Controller
 {
@@ -46,25 +47,39 @@ class DocumentController extends Controller
         return $pdf->download("Invoice-{$transaction->invoice_number}.pdf");
     }
 
-    // =============================================
+     // =============================================
     // SURAT JALAN PDF
     // =============================================
-
+ 
+    // =============================================
+    // SURAT JALAN PDF
+    // Kertas: Continuous 1/2 = 9.5" x 5.5" = 241mm x 140mm
+    // DomPDF points: 1mm = 2.8346pt
+    //   width  = 241 * 2.8346 = 683pt
+    //   height = 140 * 2.8346 = 397pt
+    // =============================================
+ 
     public function suratJalan(Delivery $delivery): Response
     {
         $delivery->load([
             'transaction.customer',
-            'items.product',
-            'shipments.items',
+            'transaction.payments.paymentMethod',
+            'items.product.unit',
+            'items.transactionItem',
             'user',
         ]);
-
+ 
         $pdf = Pdf::loadView('pdf.surat-jalan', [
             'delivery' => $delivery,
         ])
-        ->setPaper('A4')
-        ->setOptions(['defaultFont' => 'Arial']);
-
+        ->setPaper([0, 0, 683, 397])
+        ->setOptions([
+            'defaultFont'          => 'Arial',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => false,
+            'dpi'                  => 96,
+        ]);
+ 
         return $pdf->download("SuratJalan-{$delivery->do_number}.pdf");
     }
 }

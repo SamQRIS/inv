@@ -13,6 +13,7 @@ use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -23,6 +24,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
 
 class TransactionForm
 {
@@ -30,10 +32,10 @@ class TransactionForm
     {
         return $schema
             ->components([
-                Grid::make(3)->schema([
+                Grid::make(5)->schema([
 
                     // ── Kolom Kiri (span 2) ──────────────────────────────
-                    Group::make()->columnSpan(2)->schema([
+                    Group::make()->columnSpan(4)->schema([
 
                         Section::make()
                             ->columns(3)
@@ -79,6 +81,10 @@ class TransactionForm
                                     ->placeholder('Nama pembeli'),
                                 TextInput::make('end_user_phone')
                                     ->label('No. HP')->tel(),
+                                Textarea::make('end_user_address')
+                                    ->label('Alamat')
+                                    ->placeholder('Alamat lengkap customer')
+                                    ->columnSpanFull(),
                             ])
                             ->visible(fn(Get $get) => !$get('customer_id')),
 
@@ -116,10 +122,21 @@ class TransactionForm
                         Section::make('Item Pesanan')
                             ->schema([
                                 Repeater::make('items')
+                                    ->table([
+                                        TableColumn::make('Nama Produk'),
+                                        TableColumn::make('Qty')
+                                            ->width('100px'),
+                                        TableColumn::make('Satuan')
+                                            ->width('100px'),
+                                        TableColumn::make('Harga Satuan')
+                                            ->width('200px'),
+                                        TableColumn::make('Subtotal')
+                                            ->width('200px')
+                                    ])
                                     ->label('')
                                     ->schema([
                                         Select::make('product_id')
-                                            ->label('Produk')
+                                            // ->label('Produk')
                                             ->options(
                                                 Product::where('is_active', true)
                                                     ->with(['unit', 'category'])
@@ -141,10 +158,11 @@ class TransactionForm
                                                 $set('line_subtotal', $qty * (float) $product->selling_price);
                                                 self::recalculate($get, $set);
                                             })
-                                            ->columnSpanFull(),
+                                            ->columnSpan(3),
 
                                         TextInput::make('quantity')
-                                            ->label('Qty')->numeric()->minValue(1)->default(1)->required()
+                                            // ->label('Qty')
+                                            ->numeric()->minValue(1)->default(1)->required()
                                             ->live(debounce: 400)
                                             ->afterStateUpdated(function (Get $get, Set $set, $state) {
                                                 $set('line_subtotal', (int)($state ?? 0) * (float)($get('unit_price') ?? 0));
@@ -153,28 +171,34 @@ class TransactionForm
                                             ->columnSpan(2),
 
                                         TextInput::make('unit_name')
-                                            ->label('Satuan')->disabled()->dehydrated(false)->placeholder('—')
-                                            ->columnSpan(2),
+                                            // ->label('Satuan')
+                                            ->disabled()->dehydrated(false)->placeholder('—'),
+                                        // ->columnSpan(2),
 
                                         TextInput::make('unit_price')
-                                            ->label('Harga Satuan')->numeric()->prefix('Rp')->required()
+                                            // ->label('Harga Satuan')
+                                            ->numeric()->prefix('Rp')
                                             ->live(debounce: 400)
                                             ->afterStateUpdated(function (Get $get, Set $set, $state) {
                                                 $set('line_subtotal', (int)($get('quantity') ?? 0) * (float)($state ?? 0));
                                                 self::recalculate($get, $set);
                                             })
-                                            ->columnSpan(4),
+                                            ->columnSpan(3),
 
                                         TextInput::make('line_subtotal')
-                                            ->label('Subtotal')->prefix('Rp')->disabled()->dehydrated(false)
-                                            ->columnSpan(4),
+                                            // ->label('Subtotal')
+                                            ->prefix('Rp')->disabled()->dehydrated(false)
+                                            ->columnSpan(3),
 
-                                        TextInput::make('notes')
-                                            ->label('Catatan item')->placeholder('Opsional')
-                                            ->columnSpanFull(),
+                                        // TextInput::make('notes')
+                                        //     ->label('Catatan item')->placeholder('Opsional')
+                                        //     ->columnSpanFull(),
                                     ])
                                     ->columns(12)
+                                    ->compact()
                                     ->minItems(1)
+                                    ->reorderable(false)
+                                    ->defaultItems(5)
                                     ->addActionLabel('+ Tambah Item')
                                     ->live()
                                     ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
@@ -189,23 +213,32 @@ class TransactionForm
                             ->collapsed()
                             ->schema([
                                 Repeater::make('discount_json')
+                                    ->table([
+                                        TableColumn::make('Tipe'),
+                                        TableColumn::make('Nilai Diskon'),
+                                        TableColumn::make('Preview')
+                                    ])
                                     ->label('Layer Diskon')
                                     ->helperText('Dihitung berurutan. Contoh: 5% + Rp 200.000 dari 1.000.000 → 950.000 → 750.000')
                                     ->schema([
                                         Select::make('type')
-                                            ->label('Tipe')
+                                            // ->label('Tipe')
                                             ->options(['percent' => 'Persentase (%)', 'nominal' => 'Nominal (Rp)'])
                                             ->required()->live()->columnSpan(3),
 
                                         TextInput::make('value')
                                             ->label(fn(Get $get) => $get('type') === 'percent' ? 'Nilai (%)' : 'Nilai (Rp)')
+                                            ->placeholder((fn(Get $get) => $get('type') === 'percent'
+                                                ? 'Masukkan persentase (contoh: 10 untuk 10%)'
+                                                : 'Masukkan nominal dalam Rupiah'
+                                            ))
                                             ->numeric()->minValue(0)->required()
                                             ->live(debounce: 400)
                                             ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
                                             ->columnSpan(3),
 
                                         Placeholder::make('layer_label')
-                                            ->label('Preview')
+                                            // ->label('Preview')
                                             ->content(function (Get $get): string {
                                                 $type  = $get('type');
                                                 $value = (float) ($get('value') ?? 0);
@@ -216,9 +249,11 @@ class TransactionForm
                                             })
                                             ->columnSpan(6),
                                     ])
+                                    // ->compact()
                                     ->columns(12)->maxItems(5)
                                     ->addActionLabel('+ Tambah Layer Diskon')
-                                    ->reorderable()->live()
+                                    ->reorderable(false)
+                                    ->live()
                                     ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
                                     ->deleteAction(
                                         fn(Action $action) => $action->after(
@@ -326,12 +361,12 @@ class TransactionForm
                                             ->label('Jumlah (Rp)')->numeric()->prefix('Rp')->required()->minValue(1)
                                             ->live(debounce: 400)
                                             ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
-                                            ->columnSpan(6),
+                                            ->columnSpanFull(),
 
                                         DatePicker::make('payment_date')
                                             ->label('Tanggal')->default(today())->required()
                                             ->native(false)->displayFormat('d/m/Y')
-                                            ->columnSpan(6),
+                                            ->columnSpanFull(),
 
                                         TextInput::make('reference_number')
                                             ->label('No. Referensi')->placeholder('No. transfer / kode bayar')
@@ -341,16 +376,19 @@ class TransactionForm
 
                                         Fieldset::make('Detail Cicilan Pihak Ketiga')
                                             ->visible(fn(Get $get) => (bool) $get('is_installment'))
-                                            ->columns(2)
+                                            // ->columns(2)
                                             ->schema([
-                                                TextInput::make('installment_detail.provider')->label('Provider'),
-                                                TextInput::make('installment_detail.tenor')->label('Tenor (bulan)')->numeric(),
-                                                TextInput::make('installment_detail.contract_number')->label('No. Kontrak'),
-                                                TextInput::make('installment_detail.monthly_amount')->label('Cicilan/Bulan')->numeric()->prefix('Rp'),
+                                                TextInput::make('installment_detail.provider')->label('Provider')
+                                                    ->columnSpanFull(),
+                                                TextInput::make('installment_detail.tenor')->label('Tenor (bulan)')->numeric()
+                                                    ->columnSpanFull(),
+                                                TextInput::make('installment_detail.contract_number')->label('No. Kontrak')
+                                                    ->columnSpanFull(),
+                                                TextInput::make('installment_detail.monthly_amount')->label('Cicilan/Bulan')->numeric()->prefix('Rp')->columnSpanFull(),
                                             ])
                                             ->columnSpanFull(),
                                     ])
-                                    ->columns(12)
+                                    // ->columns()
                                     ->addActionLabel('+ Tambah Pembayaran')
                                     ->live()
                                     ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))

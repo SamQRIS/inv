@@ -30,6 +30,7 @@ class CreateTransaction extends CreateRecord
             'customer_id'      => $data['customer_id'] ?? null,
             'customer_name'    => $data['end_user_name'] ?? null,
             'customer_phone'   => $data['end_user_phone'] ?? null,
+            'customer_address' => $data['end_user_address'] ?? null,
             'transaction_date' => $data['transaction_date'],
             'delivery_date'    => $data['delivery_date'] ?? null,
             'delivery_note'    => $data['delivery_note'] ?? null,
@@ -46,5 +47,7 @@ class CreateTransaction extends CreateRecord
     {
         return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
     }
+
+    
 
 }

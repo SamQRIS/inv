@@ -2,6 +2,11 @@
 
 namespace App\Filament\Resources\Deliveries\Schemas;
 
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class DeliveryForm
@@ -10,18 +15,18 @@ class DeliveryForm
     {
         return $schema
             ->components([
-                Forms\Components\Section::make()
+                Section::make()
                     ->schema([
-                        Forms\Components\TextInput::make('do_number')
+                        TextInput::make('do_number')
                             ->label('No. DO')
                             ->disabled()
                             ->dehydrated(),
 
-                        Forms\Components\DatePicker::make('do_date')
+                        DatePicker::make('do_date')
                             ->label('Tanggal DO')
                             ->disabled(),
 
-                        Forms\Components\Select::make('status')
+                        Select::make('status')
                             ->label('Status')
                             ->options([
                                 'pending'   => 'Menunggu',
@@ -30,7 +35,7 @@ class DeliveryForm
                             ])
                             ->disabled(),
 
-                        Forms\Components\Textarea::make('notes')
+                        Textarea::make('notes')
                             ->label('Catatan')
                             ->rows(2)
                             ->columnSpanFull(),

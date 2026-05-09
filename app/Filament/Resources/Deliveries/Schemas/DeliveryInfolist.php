@@ -2,6 +2,9 @@
 
 namespace App\Filament\Resources\Deliveries\Schemas;
 
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class DeliveryInfolist
@@ -10,25 +13,25 @@ class DeliveryInfolist
     {
         return $schema
             ->components([
-                Infolists\Components\Section::make('Delivery Order')
+                Section::make('Delivery Order')
                     ->columns(3)
                     ->schema([
-                        Infolists\Components\TextEntry::make('do_number')
+                        TextEntry::make('do_number')
                             ->label('No. DO')
                             ->copyable(),
 
-                        Infolists\Components\TextEntry::make('transaction.invoice_number')
+                        TextEntry::make('transaction.invoice_number')
                             ->label('No. Invoice'),
 
-                        Infolists\Components\TextEntry::make('do_date')
+                        TextEntry::make('do_date')
                             ->label('Tanggal DO')
                             ->date('d/m/Y'),
 
-                        Infolists\Components\TextEntry::make('transaction.customer.name')
+                        TextEntry::make('transaction.customer.name')
                             ->label('Customer')
                             ->default('-'),
 
-                        Infolists\Components\TextEntry::make('status')
+                        TextEntry::make('status')
                             ->label('Status')
                             ->badge()
                             ->color(fn($state) => match ($state) {
@@ -42,23 +45,23 @@ class DeliveryInfolist
                                 'completed' => 'Selesai',
                             }),
 
-                        Infolists\Components\TextEntry::make('user.name')
+                        TextEntry::make('user.name')
                             ->label('Dibuat oleh'),
                     ]),
 
-                Infolists\Components\Section::make('Item Delivery')
+                Section::make('Item Delivery')
                     ->schema([
-                        Infolists\Components\RepeatableEntry::make('items')
+                        RepeatableEntry::make('items')
                             ->label('')
                             ->schema([
-                                Infolists\Components\TextEntry::make('product.name')
+                                TextEntry::make('product.name')
                                     ->label('Produk'),
-                                Infolists\Components\TextEntry::make('qty_ordered')
+                                TextEntry::make('qty_ordered')
                                     ->label('Qty Pesan'),
-                                Infolists\Components\TextEntry::make('qty_delivered')
+                                TextEntry::make('qty_delivered')
                                     ->label('Qty Terkirim')
                                     ->color(fn($record) => $record->isFullyDelivered() ? 'success' : 'warning'),
-                                Infolists\Components\TextEntry::make('qty_remaining')
+                                TextEntry::make('qty_remaining')
                                     ->label('Sisa')
                                     ->getStateUsing(fn($record) => $record->qtyRemaining())
                                     ->color(fn($record) => $record->qtyRemaining() > 0 ? 'danger' : 'success'),
@@ -66,20 +69,20 @@ class DeliveryInfolist
                             ->columns(4),
                     ]),
 
-                Infolists\Components\Section::make('Riwayat Pengiriman')
+                Section::make('Riwayat Pengiriman')
                     ->schema([
-                        Infolists\Components\RepeatableEntry::make('shipments')
+                        RepeatableEntry::make('shipments')
                             ->label('')
                             ->schema([
-                                Infolists\Components\TextEntry::make('shipment_number')
+                                TextEntry::make('shipment_number')
                                     ->label('No. Pengiriman'),
-                                Infolists\Components\TextEntry::make('shipment_date')
+                                TextEntry::make('shipment_date')
                                     ->label('Tanggal')
                                     ->date('d/m/Y'),
-                                Infolists\Components\TextEntry::make('driver_name')
+                                TextEntry::make('driver_name')
                                     ->label('Driver')
                                     ->default('-'),
-                                Infolists\Components\TextEntry::make('vehicle_number')
+                                TextEntry::make('vehicle_number')
                                     ->label('Kendaraan')
                                     ->default('-'),
                             ])

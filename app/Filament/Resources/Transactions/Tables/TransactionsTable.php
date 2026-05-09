@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Transactions\Tables;
 
 use App\Models\PaymentMethod;
 use App\Models\Transaction;
+use App\Services\DeliveryService;
 use App\Services\PaymentService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -104,6 +105,16 @@ class TransactionsTable
                         ->color('gray')
                         ->url(fn(Transaction $record) => route('transaction.invoice', $record))
                         ->openUrlInNewTab(),
+                    Action::make('generate_do')
+                        ->label('Buat Delivery Order')
+                        ->icon('heroicon-o-truck')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->action(function (Transaction $record) {
+                            app(DeliveryService::class)->createDelivery($record);
+                            Notification::make()->success()->title('DO berhasil dibuat.')->send();
+                        })
+                        ->visible(fn(Transaction $record) => $record->delivery_status === 'pending'),
                 ]),
             ])
             ->toolbarActions([

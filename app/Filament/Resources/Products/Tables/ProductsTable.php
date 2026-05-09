@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Products\Tables;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductStock;
 use App\Models\Warehouse;
 use App\Services\StockService;
 use Filament\Actions\Action;
@@ -27,7 +28,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use Filament\TrashedFilter;
+use Illuminate\Database\Eloquent\Model;
 
 class ProductsTable
 {
@@ -72,46 +73,48 @@ class ProductsTable
             ->filters([
                 SelectFilter::make('category_id')
                     ->label('Kategori')->options(Category::pluck('name', 'id')),
- 
+
                 SelectFilter::make('warehouse')
                     ->label('Ada di Gudang')
                     ->options(Warehouse::active()->pluck('name', 'id'))
-                    ->query(fn($query, array $data) =>
+                    ->query(
+                        fn($query, array $data) =>
                         $data['value']
                             ? $query->whereHas('productStocks', fn($q) =>
-                                $q->where('warehouse_id', $data['value'])->where('quantity', '>', 0))
+                            $q->where('warehouse_id', $data['value'])->where('quantity', '>', 0))
                             : $query
                     ),
- 
+
                 Filter::make('low_stock')
                     ->label('Stok Menipis (Global)')
                     ->query(fn($q) => $q->whereColumn('stock_quantity', '<=', 'minimum_stock')),
- 
+
                 TernaryFilter::make('is_active')->label('Status'),
             ])
             ->recordActions([
                 ViewAction::make(),
- 
+
                 Action::make('mutasi_stok')
                     ->label('Mutasi Stok')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
-                    ->form(function (Product $record) {
+                    ->schema(function (Product $record) {
+                        // Load semua stok per gudang sekaligus
+                        $stocks = \App\Models\ProductStock::where('product_id', $record->id)
+                            ->with('warehouse')
+                            ->get()
+                            ->mapWithKeys(fn($ps) => [
+                                $ps->warehouse_id => "{$ps->warehouse->name} (stok: {$ps->quantity} {$record->unit->symbol})"
+                            ]);
+
+                        $record->unsetRelations();
+
                         return [
                             Select::make('warehouse_id')
                                 ->label('Gudang')
-                                ->options(Warehouse::active()->pluck('name', 'id'))
-                                ->required()->live()
-                                ->afterStateUpdated(fn($state, Set $set) =>
-                                    $set('current_stock', $state ? $record->stockAt((int) $state) : null)
-                                ),
- 
-                            Placeholder::make('current_stock')
-                                ->label('Stok Saat Ini')
-                                ->content(fn(Get $get) =>
-                                    ($get('current_stock') ?? '-') . ' ' . $record->unit->symbol
-                                ),
- 
+                                ->options($stocks)  // ← langsung tampil stok di option label
+                                ->required(),
+
                             Select::make('type')
                                 ->label('Tipe Mutasi')
                                 ->options([
@@ -119,28 +122,30 @@ class ProductsTable
                                     'out'        => 'Stok Keluar',
                                     'adjustment' => 'Opname / Penyesuaian',
                                 ])
-                                ->required()->live(),
- 
+                                ->required(),
+
                             TextInput::make('quantity')
-                                ->label(fn(Get $get) => $get('type') === 'adjustment'
-                                    ? 'Set Stok Menjadi'
-                                    : 'Jumlah')
+                                ->label('Jumlah')
                                 ->numeric()->minValue(0)->required(),
- 
+
                             Textarea::make('notes')
                                 ->label('Keterangan')->required(),
                         ];
                     })
-                    ->action(function (Product $record, array $data, StockService $stockService) {
-                        $warehouse = Warehouse::findOrFail($data['warehouse_id']);
+                    ->action(function (\Illuminate\Database\Eloquent\Model $record, array $data) {
+                        /** @var Product $record */
+                        $stockService = app(\App\Services\StockService::class);
+                        $warehouse    = Warehouse::findOrFail($data['warehouse_id']);
+
                         match ($data['type']) {
                             'in'         => $stockService->addStock($record, (int)$data['quantity'], $warehouse, 'manual', null, $data['notes']),
                             'out'        => $stockService->reduceStock($record, (int)$data['quantity'], $warehouse, 'manual', 0, $data['notes']),
                             'adjustment' => $stockService->adjustStock($record, $warehouse, (int)$data['quantity'], $data['notes']),
                         };
+
                         Notification::make()->success()->title('Mutasi stok berhasil.')->send();
                     }),
- 
+
                 EditAction::make(),
                 DeleteAction::make(),
             ])

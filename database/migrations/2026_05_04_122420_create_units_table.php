@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('units', function (Blueprint $table) {
-             $table->id();
+            $table->id();
             $table->string('name');           // e.g. "Kilogram"
             $table->string('symbol');         // e.g. "kg"
             $table->boolean('is_active')->default(true);

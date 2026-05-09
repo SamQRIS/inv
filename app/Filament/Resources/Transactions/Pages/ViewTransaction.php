@@ -3,7 +3,10 @@
 namespace App\Filament\Resources\Transactions\Pages;
 
 use App\Filament\Resources\Transactions\TransactionResource;
+use App\Services\DeliveryService;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewTransaction extends ViewRecord
@@ -13,22 +16,22 @@ class ViewTransaction extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\EditAction::make(),
+            EditAction::make(),
  
-            Actions\Action::make('print_invoice')
+            Action::make('print_invoice')
                 ->label('Cetak Invoice')
                 ->icon('heroicon-o-printer')
                 ->url(fn() => route('transaction.invoice', $this->record))
                 ->openUrlInNewTab(),
  
-            Actions\Action::make('generate_do')
+            Action::make('generate_do')
                 ->label('Buat Delivery Order')
                 ->icon('heroicon-o-truck')
                 ->color('success')
                 ->requiresConfirmation()
                 ->action(function () {
-                    app(\App\Services\DeliveryService::class)->createDelivery($this->record);
-                    \Filament\Notifications\Notification::make()->success()->title('DO berhasil dibuat.')->send();
+                    app(DeliveryService::class)->createDelivery($this->record);
+                    Notification::make()->success()->title('DO berhasil dibuat.')->send();
                 })
                 ->visible(fn() => $this->record->delivery_status === 'pending'),
         ];

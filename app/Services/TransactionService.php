@@ -7,6 +7,9 @@ use App\Models\Product;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\Warehouse;
+use App\Services\DiscountService;
+use App\Services\PaymentService;
+use App\Services\StockService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -130,7 +133,7 @@ class TransactionService
     private function resolveCustomer(array $data): ?Customer
     {
         if (($data['customer_type'] ?? '') === 'end_user') {
-            return Customer::findOrCreateEndUser($data['customer_name'], $data['customer_phone'] ?? null);
+            return Customer::findOrCreateEndUser($data['customer_name'], $data['customer_phone'], $data['customer_address'] ?? null);
         }
         if (!empty($data['customer_id'])) {
             return Customer::findOrFail($data['customer_id']);

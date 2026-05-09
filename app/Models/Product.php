@@ -20,9 +20,14 @@ class Product extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'category_id', 'unit_id', 'supplier_id',
-        'name', 'sku', 'description',
-        'cost_price', 'selling_price',
+        'category_id',
+        'unit_id',
+        'supplier_id',
+        'name',
+        'sku',
+        'description',
+        'cost_price',
+        'selling_price',
         'stock_quantity',  // total agregat dari semua gudang (di-sync otomatis)
         'minimum_stock',   // minimum global
         'is_active',
@@ -99,11 +104,11 @@ class Product extends Model
      */
     public function syncTotalStock(): void
     {
-        $total = \Illuminate\Support\Facades\DB::table('product_stocks')
+        $total = DB::table('product_stocks')
             ->where('product_id', $this->id)
             ->sum('quantity');
 
-        \Illuminate\Support\Facades\DB::table('products')
+        DB::table('products')
             ->where('id', $this->id)
             ->update(['stock_quantity' => (int) $total]);
 
@@ -144,5 +149,12 @@ class Product extends Model
     public function scopeLowStock($query)
     {
         return $query->whereColumn('stock_quantity', '<=', 'minimum_stock');
+    }
+
+    // Product.php
+    public function __sleep(): array
+    {
+        $this->unsetRelations();
+        return array_keys($this->getAttributes());
     }
 }

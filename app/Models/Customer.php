@@ -77,11 +77,11 @@ class Customer extends Model
     /**
      * Auto-create end user customer dari input transaksi
      */
-    public static function findOrCreateEndUser(string $name, ?string $phone = null): static
+    public static function findOrCreateEndUser(string $name, ?string $phone = null, ?string $address = null): static
     {
         return static::firstOrCreate(
             ['name' => $name, 'type' => self::TYPE_END_USER],
-            ['phone' => $phone, 'is_active' => true]
+            ['phone' => $phone, 'address' => $address, 'is_active' => true]
         );
     }
 }

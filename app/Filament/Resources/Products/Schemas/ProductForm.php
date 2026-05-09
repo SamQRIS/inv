@@ -38,18 +38,45 @@ class ProductForm
 
                                 Select::make('category_id')
                                     ->label('Kategori')
-                                    ->options(Category::where('is_active', true)->pluck('name', 'id'))
-                                    ->searchable()->required()
+                                    ->relationship('category', 'name', fn($query) => $query->where('is_active', true))
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
                                     ->createOptionForm([
-                                        TextInput::make('name')->required(),
-                                        TextInput::make('slug')->required()->unique('categories', 'slug'),
+                                        TextInput::make('name')
+                                            ->required(),
+
+                                        TextInput::make('slug')
+                                            ->required()
+                                            ->unique('categories', 'slug'),
                                     ])
-                                    ->createOptionUsing(fn(array $d) => Category::create($d)->id),
+                                    ->createOptionUsing(function (array $data) {
+                                        return Category::create([
+                                            'name' => $data['name'],
+                                            'slug' => $data['slug'],
+                                            'is_active' => true,
+                                        ])->id;
+                                    }),
 
                                 Select::make('unit_id')
                                     ->label('Satuan')
                                     ->options(Unit::pluck('name', 'id'))
-                                    ->searchable()->required(),
+                                    ->searchable()->required()
+                                    ->createOptionForm([
+                                        TextInput::make('name')
+                                            ->required(),
+
+                                        TextInput::make('symbol')
+                                            ->required()
+                                            ->unique('units', 'symbol'),
+                                    ])
+                                    ->createOptionUsing(function (array $data) {
+                                        return Unit::create([
+                                            'name' => $data['name'],
+                                            'symbol' => $data['symbol'],
+                                            'is_active' => true,
+                                        ])->id;
+                                    }),
 
                                 Select::make('supplier_id')
                                     ->label('Supplier')
@@ -69,9 +96,9 @@ class ProductForm
                         ->schema([
                             Section::make()->columns(2)->schema([
                                 TextInput::make('cost_price')
-                                    ->label('Harga Modal')->numeric()->prefix('Rp')->required()->minValue(0),
+                                    ->label('Harga Modal')->numeric()->prefix('Rp')->minValue(0),
                                 TextInput::make('selling_price')
-                                    ->label('Harga Jual')->numeric()->prefix('Rp')->required()->minValue(0),
+                                    ->label('Harga Jual')->numeric()->prefix('Rp')->minValue(0),
                             ]),
                         ]),
 
@@ -118,7 +145,7 @@ class ProductForm
                                     // Saat EDIT: tampilkan stok saat ini (read-only)
                                     Placeholder::make('stock_per_warehouse_edit')
                                         ->label('Stok Saat Ini per Gudang')
-                                        ->content(function (?Product $record) {
+                                        ->content(function (Product $record) {
                                             if (!$record) return '-';
                                             return $record->productStocks()
                                                 ->with('warehouse')
