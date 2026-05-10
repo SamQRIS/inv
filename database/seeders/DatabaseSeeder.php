@@ -194,26 +194,6 @@ class DatabaseSeeder extends Seeder
                 'is_active'  => true,
                 'sort_order' => 2,
             ],
-            [
-                'name'       => 'Cabang Depok',
-                'code'       => 'CBG-DEPOK',
-                'address'    => 'Jl. Margonda Raya No. 55, Depok',
-                'pic'        => 'Ahmad Fauzi',
-                'phone'      => '08211112222',
-                'is_default' => false,
-                'is_active'  => true,
-                'sort_order' => 3,
-            ],
-            [
-                'name'       => 'Cabang Bekasi',
-                'code'       => 'CBG-BEKASI',
-                'address'    => 'Jl. Ahmad Yani No. 100, Bekasi',
-                'pic'        => 'Dewi Lestari',
-                'phone'      => '08223334444',
-                'is_default' => false,
-                'is_active'  => true,
-                'sort_order' => 4,
-            ],
         ];
  
         foreach ($warehouses as $data) {

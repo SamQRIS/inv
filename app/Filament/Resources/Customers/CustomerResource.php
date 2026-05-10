@@ -34,17 +34,17 @@ class CustomerResource extends Resource
     {
         return Auth::user()->can('view_transaction');
     }
- 
+
     public static function canCreate(): bool
     {
         return Auth::user()->can('create_transaction');
     }
- 
+
     public static function canEdit($record): bool
     {
         return Auth::user()->can('edit_transaction');
     }
- 
+
     public static function canDelete($record): bool
     {
         return Auth::user()->can('delete_transaction');
@@ -70,6 +70,13 @@ class CustomerResource extends Resource
         return [
             //
         ];
+    }
+
+    // CustomerResource.php
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['transactions', 'creditLogs.user']);
     }
 
     public static function getPages(): array

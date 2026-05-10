@@ -37,20 +37,20 @@ class DocumentController extends Controller
             'discountBreakdown' => $discountBreakdown,
             'discountSummary'   => $this->discountService->formatSummary($transaction->discount_json ?? []),
         ])
-        ->setPaper('A4')
-        ->setOptions([
-            'defaultFont' => 'Arial',
-            'isHtml5ParserEnabled' => true,
-            'isRemoteEnabled' => true,
-        ]);
+            ->setPaper('A4')
+            ->setOptions([
+                'defaultFont' => 'Arial',
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+            ]);
 
         return $pdf->download("Invoice-{$transaction->invoice_number}.pdf");
     }
 
-     // =============================================
+    // =============================================
     // SURAT JALAN PDF
     // =============================================
- 
+
     // =============================================
     // SURAT JALAN PDF
     // Kertas: Continuous 1/2 = 9.5" x 5.5" = 241mm x 140mm
@@ -58,7 +58,7 @@ class DocumentController extends Controller
     //   width  = 241 * 2.8346 = 683pt
     //   height = 140 * 2.8346 = 397pt
     // =============================================
- 
+
     public function suratJalan(Delivery $delivery): Response
     {
         $delivery->load([
@@ -68,18 +68,18 @@ class DocumentController extends Controller
             'items.transactionItem',
             'user',
         ]);
- 
+
         $pdf = Pdf::loadView('pdf.surat-jalan', [
             'delivery' => $delivery,
         ])
-        ->setPaper([0, 0, 683, 397])
-        ->setOptions([
-            'defaultFont'          => 'Arial',
-            'isHtml5ParserEnabled' => true,
-            'isRemoteEnabled'      => false,
-            'dpi'                  => 96,
-        ]);
- 
+            ->setPaper([0, 0, 683, 397])
+            ->setOptions([
+                'defaultFont'          => 'Arial',
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled'      => false,
+                'dpi'                  => 60,
+            ]);
+
         return $pdf->download("SuratJalan-{$delivery->do_number}.pdf");
     }
 }

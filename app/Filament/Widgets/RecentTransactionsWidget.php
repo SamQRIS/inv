@@ -14,8 +14,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class RecentTransactionsWidget extends TableWidget
 {
-    protected static ?int $sort    = 3;
+    protected static ?int $sort    = 4;
     // protected int | string $columnSpan = 'full';
+    protected int | string |array $columnSpan = '1';
 
     
  

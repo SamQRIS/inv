@@ -7,6 +7,8 @@ use App\Models\Product;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\Warehouse;
+use App\Services\ActivityLogger;
+use App\Services\CreditService;
 use App\Services\DiscountService;
 use App\Services\PaymentService;
 use App\Services\StockService;
@@ -37,6 +39,7 @@ class TransactionService
         protected DiscountService $discountService,
         protected StockService    $stockService,
         protected PaymentService  $paymentService,
+        protected CreditService   $creditService, // ← tambah ini
     ) {}
 
     public function create(array $data): Transaction
@@ -66,8 +69,27 @@ class TransactionService
             $discountJson   = $data['discount_json'] ?? null;
             $discountType   = $this->discountService->resolveDiscountType($discountJson);
 
-            // 5. Validasi tidak overpay
-            $totalPayments = collect($data['payments'] ?? [])->sum('amount');
+            // 5. Validasi credit limit untuk customer DO (tempo)
+            $totalPayments = collect($data['payments'] ?? [])->sum(fn($p) => (float)($p['amount'] ?? 0));
+            if ($customer && $customer->type === 'do' && $customer->credit_limit > 0) {
+                $unpaidAmount = max(0, $grandTotal - $totalPayments);
+                if ($unpaidAmount > 0) {
+                    $available = $customer->availableCredit();
+                    if ($unpaidAmount > $available) {
+                        throw ValidationException::withMessages([
+                            'customer_id' => sprintf(
+                                'Credit limit %s tidak mencukupi. Sisa kredit: Rp %s, Dibutuhkan: Rp %s. ' .
+                                    'Bayar DP atau hubungi admin untuk top up kredit.',
+                                $customer->name,
+                                number_format($available, 0, ',', '.'),
+                                number_format($unpaidAmount, 0, ',', '.')
+                            ),
+                        ]);
+                    }
+                }
+            }
+
+            // 6. Validasi tidak overpay
             if ($totalPayments > $grandTotal) {
                 throw ValidationException::withMessages([
                     'payments' => "Total pembayaran melebihi grand total.",
@@ -126,6 +148,27 @@ class TransactionService
                 $this->paymentService->processPayments($transaction, $data['payments']);
             }
 
+            // 9. ✅ Catat penggunaan credit untuk customer DO
+            $transaction->refresh();
+            if ($customer && $customer->type === 'do' && $transaction->amount_remaining > 0) {
+                $this->creditService->recordUsage(
+                    $customer,
+                    (float) $transaction->amount_remaining,
+                    $transaction->id
+                );
+            }
+
+            // Di method create(), setelah return transaction (sebelum closing DB::transaction)
+
+
+            // 10. Log aktivitas
+            // ActivityLogger::created(
+            //     $transaction,
+            //     $transaction->invoice_number,
+            //     ['grand_total' => $transaction->grand_total, 'payment_status' => $transaction->payment_status]
+            // );
+
+
             return $transaction->fresh(['items', 'payments']);
         });
     }
@@ -133,7 +176,7 @@ class TransactionService
     private function resolveCustomer(array $data): ?Customer
     {
         if (($data['customer_type'] ?? '') === 'end_user') {
-            return Customer::findOrCreateEndUser($data['customer_name'], $data['customer_phone'], $data['customer_address'] ?? null);
+            return Customer::findOrCreateEndUser($data['customer_name'], $data['customer_phone'] ?? null);
         }
         if (!empty($data['customer_id'])) {
             return Customer::findOrFail($data['customer_id']);

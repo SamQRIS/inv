@@ -107,22 +107,50 @@ class Transaction extends Model
     }
 
     // =============================================
-    // INVOICE NUMBER GENERATOR
+    // INVOICE NUMBER GENERATOR (atomic — race condition safe)
     // =============================================
 
+    /**
+     * Generate invoice number yang atomic menggunakan database lock.
+     * Mencegah duplikat nomor invoice jika 2 kasir transaksi bersamaan.
+     *
+     * Format: INV-YYYYMMDD-XXXX
+     * Contoh: INV-20260508-0001
+     */
     public static function generateInvoiceNumber(): string
     {
-        $prefix = 'INV';
-        $date   = now()->format('Ymd');
-        $last   = static::whereDate('created_at', today())
-            ->orderByDesc('id')
-            ->first();
+        return \Illuminate\Support\Facades\DB::transaction(function () {
+            $date   = now()->format('Ymd');
+            $key    = "INV-{$date}";
 
-        $sequence = $last
-            ? ((int) substr($last->invoice_number, -4)) + 1
-            : 1;
+            // Upsert + lock row untuk atomic increment
+            // Jika belum ada row untuk hari ini, buat baru dengan sequence = 0
+            \Illuminate\Support\Facades\DB::table('invoice_sequences')
+                ->insertOrIgnore([
+                    'prefix'         => $key,
+                    'last_sequence'  => 0,
+                    'sequence_date'  => today()->toDateString(),
+                    'created_at'     => now(),
+                    'updated_at'     => now(),
+                ]);
 
-        return sprintf('%s-%s-%04d', $prefix, $date, $sequence);
+            // Lock row dan increment — atomic, tidak bisa race condition
+            $row = \Illuminate\Support\Facades\DB::table('invoice_sequences')
+                ->where('prefix', $key)
+                ->lockForUpdate()
+                ->first();
+
+            $nextSequence = $row->last_sequence + 1;
+
+            \Illuminate\Support\Facades\DB::table('invoice_sequences')
+                ->where('prefix', $key)
+                ->update([
+                    'last_sequence' => $nextSequence,
+                    'updated_at'    => now(),
+                ]);
+
+            return sprintf('INV-%s-%04d', $date, $nextSequence);
+        });
     }
 
     // =============================================

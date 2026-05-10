@@ -9,6 +9,7 @@ use App\Services\PaymentService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
@@ -115,6 +116,8 @@ class TransactionsTable
                             Notification::make()->success()->title('DO berhasil dibuat.')->send();
                         })
                         ->visible(fn(Transaction $record) => $record->delivery_status === 'pending'),
+                    DeleteAction::make()
+                        ->requiresConfirmation()
                 ]),
             ])
             ->toolbarActions([
