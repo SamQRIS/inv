@@ -44,10 +44,12 @@ class CreditLog extends Model
     public function typeLabel(): string
     {
         return match($this->type) {
-            'topup'  => 'Top Up',
-            'deduct' => 'Pengurangan',
-            'used'   => 'Terpakai',
-            'refund' => 'Refund',
+            'topup'  => 'Top Up Limit',
+            'deduct' => 'Pengurangan Limit',
+            'used'   => 'KreditTerpakai',
+            'refund' => 'Refund Kredit',
+            'deposit'      => 'Deposit Masuk',      // ← kelebihan bayar
+            'deposit_used' => 'Deposit Dipakai',    // ← deposit dipakai transaksi
             default  => $this->type,
         };
     }
@@ -59,12 +61,14 @@ class CreditLog extends Model
             'deduct' => 'danger',
             'used'   => 'warning',
             'refund' => 'info',
+            'deposit'      => 'primary',
+            'deposit_used' => 'secondary',
             default  => 'gray',
         };
     }
  
     public function isCredit(): bool
     {
-        return in_array($this->type, ['topup', 'refund']);
+        return in_array($this->type, ['topup', 'refund', 'deposit']);
     }
 }

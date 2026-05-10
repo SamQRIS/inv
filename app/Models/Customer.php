@@ -18,6 +18,7 @@ class Customer extends Model
     protected $fillable = [
         'name', 'phone', 'address', 'type',
         'credit_limit', 'credit_used',
+        'deposit_balance',
         'default_discount', 'is_active',
     ];
  
@@ -25,9 +26,10 @@ class Customer extends Model
         'default_discount' => 'array',
         'credit_limit'     => 'decimal:2',
         'credit_used'      => 'decimal:2',
+        'deposit_balance'  => 'decimal:2',
         'is_active'        => 'boolean',
     ];
- 
+ //Relasi==============================================
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
@@ -38,6 +40,8 @@ class Customer extends Model
         return $this->hasMany(CreditLog::class)->latest();
     }
  
+
+//Credit helper==============================================
     public function creditUsagePercent(): float
     {
         if ((float) $this->credit_limit <= 0) return 0;
@@ -48,7 +52,23 @@ class Customer extends Model
     {
         return $this->credit_used >= $this->credit_limit;
     }
+
+    public function availableCredit(): float
+    {
+        return max(0, (float) $this->credit_limit - (float) $this->credit_used);
+    }
+
+//Deposit helper==============================================
+    public function hasDeposit(): bool
+    {
+        return (float) $this->deposit_balance > 0;
+    }
  
+    public function depositBalance(): float
+    {
+        return (float) $this->deposit_balance;
+    }
+ //Type helper==============================================
     public function isDo(): bool
     {
         return $this->type === self::TYPE_DO;
@@ -58,12 +78,8 @@ class Customer extends Model
     {
         return $this->type === self::TYPE_END_USER;
     }
- 
-    public function availableCredit(): float
-    {
-        return max(0, (float) $this->credit_limit - (float) $this->credit_used);
-    }
- 
+
+//Scope helper============================================== 
     public function scopeDo($query)
     {
         return $query->where('type', self::TYPE_DO);
@@ -74,6 +90,7 @@ class Customer extends Model
         return $query->where('type', self::TYPE_END_USER);
     }
  
+//Static helper==============================================
     /**
      * Auto-create end user customer dari input transaksi
      */

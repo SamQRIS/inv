@@ -39,11 +39,6 @@
             background: #fff;
         }
 
-        .page {
-            /* width: 100%; */
-            /* padding-left: 10px;
-        padding-right: 10px; */
-        }
 
         .title-row {
             text-align: center;

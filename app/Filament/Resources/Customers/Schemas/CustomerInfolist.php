@@ -32,7 +32,7 @@ class CustomerInfolist
                 ]),
 
             // ── Panel Kredit ─────────────────────────────────────────
-            Section::make('Informasi Kredit')
+            Section::make('Informasi Kredit & Deposit')
                 ->visible(fn($record) => $record->type === 'do')
                 ->columns(4)
                 ->schema([
@@ -41,7 +41,7 @@ class CustomerInfolist
                         ->color('primary')->weight('bold'),
 
                     TextEntry::make('credit_used')
-                        ->label('Terpakai')->money('IDR')
+                        ->label('Kredit Terpakai')->money('IDR')
                         ->color(fn($record) => $record->credit_used > 0 ? 'warning' : 'gray'),
 
                     TextEntry::make('available_credit')
@@ -60,15 +60,24 @@ class CustomerInfolist
                             default                             => 'success',
                         }),
 
+                    // ✅ Deposit balance
+                    TextEntry::make('deposit_balance')
+                        ->label('Saldo Deposit')
+                        ->money('IDR')
+                        ->color(fn($record) => $record->deposit_balance > 0 ? 'success' : 'gray')
+                        ->weight(fn($record) => $record->deposit_balance > 0 ? 'bold' : 'normal')
+                        ->helperText('Kelebihan bayar yang tersimpan, otomatis dipakai untuk transaksi berikutnya.')
+                        ->columnSpan(2),
+
                     TextEntry::make('default_discount_display')
                         ->label('Diskon Default')
                         ->getStateUsing(fn($record) => $discountService->formatSummary($record->default_discount ?? []))
                         ->placeholder('Tidak ada diskon default')
-                        ->columnSpan(4),
+                        ->columnSpan(2),
                 ]),
 
             // ── Riwayat Kredit ───────────────────────────────────────
-            Section::make('Riwayat Kredit')
+            Section::make('Riwayat Kredit & Deposit')
                 ->visible(fn($record) => $record->type === 'do')
                 ->collapsed()
                 ->schema([

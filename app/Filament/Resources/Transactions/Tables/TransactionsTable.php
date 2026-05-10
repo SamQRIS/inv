@@ -97,7 +97,7 @@ class TransactionsTable
                         ->icon('heroicon-o-banknotes')
                         ->color('warning')
                         ->visible(fn(Transaction $record) => in_array($record->payment_status, ['unpaid', 'partial']))
-                        ->form(fn(Transaction $record) => self::paymentForm($record))
+                        ->schema(fn(Transaction $record) => self::paymentForm($record))
                         ->action(fn(Transaction $record, array $data) => self::handleAddPayment($record, $data)),
 
                     Action::make('print_invoice')

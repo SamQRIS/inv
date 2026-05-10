@@ -59,6 +59,10 @@ class CustomersTable
                     ->label('Terpakai')->money('IDR')
                     ->color(fn($record) => $record->credit_used > 0 ? 'warning' : 'gray')
                     ->visibleFrom('lg'),
+                TextColumn::make('deposit_balance')
+                    ->label('Deposit')->money('IDR')
+                    ->color(fn($record) => $record->deposit_balance > 0 ? 'success' : 'gray')
+                    ->visibleFrom('lg'),
  
                 TextColumn::make('available_credit')
                     ->label('Sisa Kredit')

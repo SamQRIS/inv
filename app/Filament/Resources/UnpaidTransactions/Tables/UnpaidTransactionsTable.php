@@ -171,22 +171,15 @@ class UnpaidTransactionsTable
                     ),
             ])
             ->recordActions([
-                // ── TAMBAH PEMBAYARAN — aksi utama ───────────────────
-                Action::make('add_payment')
-                    ->label('Tambah Pembayaran')
-                    ->icon('heroicon-o-banknotes')
-                    ->color('success')
-                    ->button()
-                    ->modalHeading(
-                        fn(Transaction $record) =>
-                        'Tambah Pembayaran — ' . $record->invoice_number
-                    )
-                    ->modalDescription(
-                        fn(Transaction $record) =>
-                        'Sisa tagihan: Rp ' . number_format($record->amount_remaining, 0, ',', '.')
-                    )
-                    ->form(fn(Transaction $record) => self::addPaymentForm($record))
-                    ->action(fn(Transaction $record, array $data) => self::handleAddPayment($record, $data)),
+                // ── TAMBAH PEMBAYARAN — aksi utama ─────────────────── 
+                // ── Tambah Pembayaran ────────────────────────────
+                    Action::make('add_payment')
+                        ->label('Tambah Pembayaran')
+                        ->icon('heroicon-o-banknotes')
+                        ->color('warning')
+                        ->visible(fn(Transaction $record) => in_array($record->payment_status, ['unpaid', 'partial']))
+                        ->schema(fn(Transaction $record) => self::paymentForm($record))
+                        ->action(fn(Transaction $record, array $data) => self::handleAddPayment($record, $data)),
 
                 ActionGroup::make([
                     ViewAction::make(),
@@ -216,68 +209,42 @@ class UnpaidTransactionsTable
     // PAYMENT FORM
     // =========================================================
 
-    public static function addPaymentForm(Transaction $record): array
+    public static function paymentForm(Transaction $record): array
     {
         return [
-            // Info tagihan lengkap
-            Grid::make(3)->schema([
-                Placeholder::make('info_grand_total')
-                    ->label('Grand Total')
-                    ->content('Rp ' . number_format($record->grand_total, 0, ',', '.')),
-
-                Placeholder::make('info_paid')
-                    ->label('Sudah Dibayar')
-                    ->content('Rp ' . number_format($record->amount_paid, 0, ',', '.')),
-
-                Placeholder::make('info_remaining')
-                    ->label('Sisa Tagihan')
-                    ->content('Rp ' . number_format($record->amount_remaining, 0, ',', '.')),
-            ]),
+            Placeholder::make('info_tagihan')
+                ->label('Informasi Tagihan')
+                ->content(
+                    'Grand Total: Rp ' . number_format($record->grand_total, 0, ',', '.') .
+                        ' | Dibayar: Rp '  . number_format($record->amount_paid, 0, ',', '.') .
+                        ' | Sisa: Rp '     . number_format($record->amount_remaining, 0, ',', '.')
+                ),
 
             Select::make('payment_method_id')
                 ->label('Metode Pembayaran')
                 ->options(PaymentMethod::where('is_active', true)->orderBy('sort_order')->pluck('name', 'id'))
-                ->searchable()
-                ->required()
-                ->live()
-                ->afterStateUpdated(function ($state, Set $set) use ($record) {
+                ->searchable()->required()->live()
+                ->afterStateUpdated(function (Get $get, Set $set, $state) use ($record) {
                     $method = PaymentMethod::find($state);
                     $set('is_installment', (bool) $method?->is_installment);
-                    // Auto-fill dengan sisa tagihan
                     if (!$method?->is_installment) {
                         $set('amount', $record->amount_remaining);
                     }
                 }),
 
             TextInput::make('amount')
-                ->label('Jumlah Pembayaran (DP / Pelunasan)')
-                ->numeric()
-                ->prefix('Rp')
-                ->required()
-                ->minValue(1)
+                ->label('Jumlah Pembayaran')
+                ->numeric()->prefix('Rp')->required()->minValue(1)
                 ->default($record->amount_remaining)
-                ->helperText(
-                    'Isi sesuai jumlah DP yang dibayar. Maks: Rp ' .
-                        number_format($record->amount_remaining, 0, ',', '.')
-                ),
+                ->helperText('Maks: Rp ' . number_format($record->amount_remaining, 0, ',', '.')),
 
             DatePicker::make('payment_date')
                 ->label('Tanggal Pembayaran')
-                ->default(today())
-                ->native(false)
-                ->displayFormat('d/m/Y')
-                ->required(),
+                ->default(today())->native(false)->displayFormat('d/m/Y')->required(),
 
             TextInput::make('reference_number')
                 ->label('No. Referensi')
-                ->placeholder('No. transfer, kode QRIS, no. kwitansi, dll')
-                ->nullable(),
-
-            Textarea::make('notes')
-                ->label('Catatan')
-                ->placeholder('Contoh: DP pertama, cicilan ke-2, pelunasan, dll')
-                ->rows(2)
-                ->nullable(),
+                ->placeholder('No. transfer, kode QRIS, no. kwitansi, dll')->nullable(),
 
             Hidden::make('is_installment')->default(false),
 
@@ -292,24 +259,13 @@ class UnpaidTransactionsTable
                     TextInput::make('installment_detail.contract_number')
                         ->label('No. Kontrak'),
                     TextInput::make('installment_detail.monthly_amount')
-                        ->label('Cicilan/Bulan')->numeric()->prefix('Rp'),
+                        ->label('Cicilan / Bulan')->numeric()->prefix('Rp'),
                 ]),
         ];
     }
 
     public static function handleAddPayment(Transaction $record, array $data): void
     {
-        $amount = (float) $data['amount'];
-
-        if ($amount > (float) $record->amount_remaining) {
-            Notification::make()
-                ->danger()
-                ->title('Jumlah melebihi sisa tagihan')
-                ->body('Maks: Rp ' . number_format($record->amount_remaining, 0, ',', '.'))
-                ->send();
-            return;
-        }
-
         $installmentDetail = null;
         if (!empty($data['is_installment']) && !empty($data['installment_detail'])) {
             $detail = array_filter($data['installment_detail'], fn($v) => $v !== null && $v !== '');
@@ -318,20 +274,16 @@ class UnpaidTransactionsTable
 
         app(PaymentService::class)->addPayment($record, [
             'payment_method_id'  => $data['payment_method_id'],
-            'amount'             => $amount,
+            'amount'             => (float) $data['amount'],
             'payment_date'       => $data['payment_date'],
             'reference_number'   => $data['reference_number'] ?? null,
             'installment_detail' => $installmentDetail,
-            'notes'              => $data['notes'] ?? null,
         ]);
-
-        $record->refresh();
-        $statusLabel = $record->payment_status === 'paid' ? '✅ Lunas!' : '🟡 Sebagian (sisa Rp ' . number_format($record->amount_remaining, 0, ',', '.') . ')';
 
         Notification::make()
             ->success()
             ->title('Pembayaran berhasil ditambahkan')
-            ->body("Rp " . number_format($amount, 0, ',', '.') . " | Status: {$statusLabel}")
+            ->body('Rp ' . number_format($data['amount'], 0, ',', '.'))
             ->send();
     }
 }

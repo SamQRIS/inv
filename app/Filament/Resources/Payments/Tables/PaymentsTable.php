@@ -160,7 +160,7 @@ class PaymentsTable
                             'paymentMethod',
                             fn(Builder $q) => $q->where('is_installment', $value)
                         );
-                    }),
+                    }), 
             ])
             ->filtersLayout(FiltersLayout::AboveContent)
             ->filtersFormColumns(3)
