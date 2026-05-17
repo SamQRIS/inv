@@ -9,6 +9,7 @@ use App\Models\Unit;
 use App\Models\Warehouse;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -17,6 +18,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
 
 class ProductForm
 {
@@ -116,18 +118,25 @@ class ProductForm
                                     // Hanya tampil saat CREATE
                                     Repeater::make('stock_per_warehouse')
                                         ->label('Stok Awal per Gudang')
+                                        ->compact()
+                                        ->reorderable(false)
+                                        ->table([
+                                            TableColumn::make('Gudang'),
+                                            TableColumn::make('Stok Awal'),
+                                            TableColumn::make('Min. Stock'),
+                                        ])
                                         ->schema([
                                             Select::make('warehouse_id')
-                                                ->label('Gudang')
+                                                // ->label('Gudang')
                                                 ->options(Warehouse::active()->orderBy('sort_order')->pluck('name', 'id'))
                                                 ->required()->distinct()->columnSpan(4),
 
                                             TextInput::make('quantity')
-                                                ->label('Stok Awal')
+                                                // ->label('Stok Awal')
                                                 ->numeric()->minValue(0)->default(0)->required()->columnSpan(2),
 
                                             TextInput::make('minimum_stock')
-                                                ->label('Min. Stok (gudang ini)')
+                                                // ->label('Min. Stok (gudang ini)')
                                                 ->numeric()->minValue(0)->default(0)->columnSpan(2),
                                         ])
                                         ->columns(8)

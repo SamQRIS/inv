@@ -32,12 +32,16 @@ class TransactionObserver
      */
     public function deleted(Transaction $transaction): void
     {
-        $customer = $transaction->customer;
-        if ($customer && $customer->type === 'do' && (float) $transaction->amount_remaining > 0) {
-            $newCreditUsed = max(0, (float) $customer->credit_used - (float) $transaction->amount_remaining);
-            $customer->update(['credit_used' => $newCreditUsed]);
+         // Jika transaksi dihapus (soft delete) dan belum void/cancel
+        // kembalikan credit
+        if (!in_array($transaction->payment_status, ['void', 'cancelled'])) {
+            $customer = $transaction->customer;
+            if ($customer && $customer->type === 'do' && (float) $transaction->amount_remaining > 0) {
+                $newCreditUsed = max(0, (float) $customer->credit_used - (float) $transaction->amount_remaining);
+                $customer->update(['credit_used' => $newCreditUsed]);
+            }
         }
-
+ 
         ActivityLogger::deleted($transaction, $transaction->invoice_number);
     }
 
@@ -46,13 +50,16 @@ class TransactionObserver
      */
     public function restored(Transaction $transaction): void
     {
-        $customer = $transaction->customer;
-        if ($customer && $customer->type === 'do' && (float) $transaction->amount_remaining > 0) {
-            $customer->update([
-                'credit_used' => (float) $customer->credit_used + (float) $transaction->amount_remaining
-            ]);
+        // Restore: kembalikan credit_used jika transaksi belum lunas
+        if (!in_array($transaction->payment_status, ['void', 'cancelled'])) {
+            $customer = $transaction->customer;
+            if ($customer && $customer->type === 'do' && (float) $transaction->amount_remaining > 0) {
+                $customer->update([
+                    'credit_used' => (float) $customer->credit_used + (float) $transaction->amount_remaining
+                ]);
+            }
         }
-
+ 
         ActivityLogger::restored($transaction, $transaction->invoice_number);
     }
 

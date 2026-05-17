@@ -35,20 +35,33 @@ class StatsOverviewWidget extends BaseStatsOverviewWidget
         $thisMonth = now()->startOfMonth();
 
         // Transaksi hari ini
-        $todaySales = Transaction::whereDate('transaction_date', $today)->sum('grand_total');
-        $todayCount = Transaction::whereDate('transaction_date', $today)->count();
+        // ✅ SESUDAH — tambah whereNotIn di setiap query:
+        $todaySales = Transaction::whereDate('transaction_date', $today)
+            ->whereNotIn('payment_status', ['void', 'cancelled'])
+            ->sum('grand_total');
 
-        // Transaksi bulan ini
-        $monthSales = Transaction::where('transaction_date', '>=', $thisMonth)->sum('grand_total');
+        $todayCount = Transaction::whereDate('transaction_date', $today)
+            ->whereNotIn('payment_status', ['void', 'cancelled'])
+            ->count();
 
-        // Piutang (partial + unpaid)
-        $piutang = Transaction::whereIn('payment_status', ['unpaid', 'partial'])->sum('amount_remaining');
+        $monthSales = Transaction::where('transaction_date', '>=', $thisMonth)
+            ->whereNotIn('payment_status', ['void', 'cancelled'])
+            ->sum('grand_total');
+
+        $piutang = Transaction::whereIn('payment_status', ['unpaid', 'partial'])
+            ->sum('amount_remaining');
 
         // Stok menipis
         $lowStockCount = Product::whereColumn('stock_quantity', '<=', 'minimum_stock')->where('is_active', true)->count();
 
         // DO pending
-        $pendingDO = \App\Models\Delivery::where('status', '!=', 'completed')->count();
+        $pendingDO = \App\Models\Delivery::where('status', '!=', 'completed')
+            ->whereHas(
+                'transaction',
+                fn($q) =>
+                $q->whereNotIn('payment_status', ['void', 'cancelled'])
+            )
+            ->count();
 
         return [
             Stat::make('Penjualan Hari Ini', 'Rp ' . number_format($todaySales, 0, ',', '.'))

@@ -41,6 +41,9 @@ class StockService
             $ps->update(['quantity' => $stockAfter]);
             $product->syncTotalStock();
 
+            // ✅ Clear backorder jika stok sekarang mencukupi
+            $this->clearBackorderIfFulfilled($product, $warehouse);
+
             return StockMovement::create([
                 'product_id'     => $product->id,
                 'warehouse_id'   => $warehouse->id,
@@ -55,6 +58,56 @@ class StockService
                 'moved_at'       => now(),
             ]);
         });
+    }
+
+    // ✅ Tambah method ini
+    private function clearBackorderIfFulfilled(Product $product, Warehouse $warehouse): void
+    {
+        $currentStock = $product->stockAt($warehouse);
+
+        // Ambil semua transaction items yang masih backorder untuk produk ini
+        $backorderItems = \App\Models\TransactionItem::where('product_id', $product->id)
+            ->where('warehouse_id', $warehouse->id)
+            ->where('is_backorder', true)
+            ->where('qty_backorder', '>', 0)
+            ->orderBy('created_at') // FIFO — yang lama dipenuhi dulu
+            ->get();
+
+        if ($backorderItems->isEmpty()) return;
+
+        $remainingStock = $currentStock;
+
+        foreach ($backorderItems as $item) {
+            if ($remainingStock <= 0) break;
+
+            if ($remainingStock >= $item->qty_backorder) {
+                // Stok cukup untuk penuhi backorder ini sepenuhnya
+                $remainingStock -= $item->qty_backorder;
+                $item->update([
+                    'is_backorder'  => false,
+                    'qty_backorder' => 0,
+                ]);
+
+                // Notifikasi
+                \Filament\Notifications\Notification::make()
+                    ->success()
+                    ->title('Backorder Terpenuhi')
+                    ->body("Backorder {$product->name} untuk transaksi #{$item->transaction_id} sudah terpenuhi.")
+                    ->send();
+            } else {
+                // Stok hanya cukup sebagian
+                $item->update([
+                    'qty_backorder' => $item->qty_backorder - $remainingStock,
+                ]);
+                $remainingStock = 0;
+
+                \Filament\Notifications\Notification::make()
+                    ->warning()
+                    ->title('Backorder Terpenuhi Sebagian')
+                    ->body("Backorder {$product->name} untuk transaksi #{$item->transaction_id} terpenuhi sebagian. Sisa: " . $item->qty_backorder . " unit.")
+                    ->send();
+            }
+        }
     }
 
     // ============================================================
@@ -89,7 +142,7 @@ class StockService
                 $available = $ps?->quantity ?? 0;
                 throw ValidationException::withMessages([
                     'stock' => "Stok {$product->name} di gudang [{$warehouse->name}] tidak mencukupi. "
-                             . "Tersedia: {$available}, Dibutuhkan: {$quantity}.",
+                        . "Tersedia: {$available}, Dibutuhkan: {$quantity}.",
                 ]);
             }
 
@@ -150,7 +203,7 @@ class StockService
                 $available = $psFrom?->quantity ?? 0;
                 throw ValidationException::withMessages([
                     'stock' => "Stok {$product->name} di [{$fromWarehouse->name}] tidak mencukupi. "
-                             . "Tersedia: {$available}, Dibutuhkan: {$quantity}.",
+                        . "Tersedia: {$available}, Dibutuhkan: {$quantity}.",
                 ]);
             }
 
@@ -217,7 +270,7 @@ class StockService
         if ($available < $qty) {
             throw ValidationException::withMessages([
                 'stock' => "Stok {$product->name} di gudang [{$warehouse->name}] tidak mencukupi. "
-                         . "Tersedia: {$available}, Dibutuhkan: {$qty}.",
+                    . "Tersedia: {$available}, Dibutuhkan: {$qty}.",
             ]);
         }
     }
@@ -230,7 +283,7 @@ class StockService
         if ($product->stock_quantity < $qty) {
             throw ValidationException::withMessages([
                 'stock' => "Total stok {$product->name} tidak mencukupi. "
-                         . "Tersedia: {$product->stock_quantity}, Dibutuhkan: {$qty}.",
+                    . "Tersedia: {$product->stock_quantity}, Dibutuhkan: {$qty}.",
             ]);
         }
     }

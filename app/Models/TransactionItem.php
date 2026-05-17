@@ -10,10 +10,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class TransactionItem extends Model
 {
     protected $fillable = [
-        'transaction_id', 'product_id',
-        'product_name', 'product_sku', 'unit_name',
-        'unit_price', 'quantity', 'subtotal', 'notes',
-    ];
+    'transaction_id',
+    'product_id',
+    'warehouse_id',    // ← tambah ini
+    'product_name',
+    'product_sku',
+    'unit_name',
+    'unit_price',
+    'quantity',
+    'subtotal',
+    'notes',
+    'is_backorder',
+    'qty_backorder',
+];
  
     protected $casts = [
         'unit_price' => 'decimal:2',

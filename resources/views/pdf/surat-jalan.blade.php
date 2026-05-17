@@ -9,11 +9,6 @@
      * DomPDF: setPaper([0, 0, 683, 397])
      * Layout: 100% table-based — paling stabil di DomPDF
      */
-
-        @page {
-            margin: 0;
-        }
-
         @media print {
             @page {
                 margin: 0;

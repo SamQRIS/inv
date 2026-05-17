@@ -26,6 +26,7 @@ class CreateTransaction extends CreateRecord
         }
  
         $transactionData = [
+            'invoice_number'   => $data['invoice_number'],
             'customer_type'    => $customerType,
             'customer_id'      => $data['customer_id'] ?? null,
             'customer_name'    => $data['end_user_name'] ?? null,
@@ -38,6 +39,7 @@ class CreateTransaction extends CreateRecord
             'discount_json'    => $data['discount_json'] ?? null,
             'payments'         => $data['payments'] ?? [],
             'notes'            => $data['notes'] ?? null,
+            'admin_override'   => (bool) ($data['admin_override'] ?? false), // ← tambah ini
         ];
  
         return $service->create($transactionData);

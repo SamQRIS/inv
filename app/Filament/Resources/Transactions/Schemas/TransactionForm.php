@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Transaction;
 use App\Services\DiscountService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -41,11 +42,19 @@ class TransactionForm
                             ->columns(3)
                             ->schema([
                                 TextInput::make('invoice_number')
-                                    ->label('No. Invoice')
-                                    ->default(fn() => Transaction::generateInvoiceNumber())
-                                    ->disabled()
-                                    ->dehydrated()
-                                    ->prefixIcon('heroicon-m-document-text'),
+                                    ->label('No. Nota / Invoice')
+                                    // ->default(fn() => Transaction::generateInvoiceNumber())
+                                    ->required()
+                                    ->unique(Transaction::class, 'invoice_number', ignoreRecord: true)
+                                    ->placeholder('Contoh: A090001')
+                                    ->prefixIcon('heroicon-m-document-text')
+                                    ->dehydrated(), // ← pastikan ikut di-submit
+                                // TextInput::make('invoice_number')
+                                //     ->label('No. Invoice')
+                                //     ->default(fn() => Transaction::generateInvoiceNumber())
+                                //     ->disabled()
+                                //     ->dehydrated()
+                                //     ->prefixIcon('heroicon-m-document-text'),
 
                                 DatePicker::make('transaction_date')
                                     ->label('Tanggal Transaksi')
@@ -268,6 +277,40 @@ class TransactionForm
                                 Textarea::make('notes')
                                     ->label('')->placeholder('Catatan tambahan...')->rows(2)->columnSpanFull(),
                             ]),
+                        Section::make('Persetujuan Admin')
+                            ->description('Tampil hanya jika deposit customer DO tidak mencukupi.')
+                            ->visible(function (Get $get) {
+                                $customerId = $get('customer_id');
+                                if (!$customerId) return false;
+
+                                $customer = \App\Models\Customer::find($customerId);
+                                if (!$customer || $customer->type !== 'do') return false;
+
+                                // Hitung grand total sementara untuk cek deposit
+                                $items    = $get('items') ?? [];
+                                $subtotal = collect($items)->sum(fn($i) => ((float)($i['quantity'] ?? 0)) * ((float)($i['unit_price'] ?? 0)));
+                                // Perkiraan grandTotal tanpa diskon — cukup untuk trigger warning
+                                return $customer->depositBalance() < $subtotal;
+                            })
+                            ->schema([
+                                Placeholder::make('deposit_warning')
+                                    ->label('')
+                                    ->content(function (Get $get) {
+                                        $customerId = $get('customer_id');
+                                        if (!$customerId) return '';
+                                        $customer = \App\Models\Customer::find($customerId);
+                                        if (!$customer) return '';
+
+                                        return '⚠ Deposit ' . $customer->name . ' tidak mencukupi. '
+                                            . 'Saldo deposit: Rp ' . number_format($customer->deposit_balance, 0, ',', '.') . '. '
+                                            . 'Centang di bawah untuk memproses order dengan persetujuan admin.';
+                                    }),
+
+                                Checkbox::make('admin_override')
+                                    ->label('Saya (admin) menyetujui order ini meskipun deposit tidak mencukupi')
+                                    ->helperText('Transaksi tetap diproses. Customer wajib top up deposit segera.')
+                                    ->default(false),
+                            ])
                     ]),
 
                     // ── Kolom Kanan: Summary + Pembayaran ────────────────
@@ -397,7 +440,8 @@ class TransactionForm
                                             fn(Get $get, Set $set) => self::recalculate($get, $set)
                                         )
                                     ),
-                            ]),
+                            ])
+                        // ->visible(fn(Get $get) => !$get('customer_id')),
                     ]),
                 ]),
             ])->columns(1);
@@ -433,4 +477,9 @@ class TransactionForm
         $set('_discount_raw',   $discountAmount);
         $set('_grandtotal_raw', $grandTotal);
     }
+
+    // public static function adminOverrideSection(): Section
+    // {
+    //     return;
+    // }
 }

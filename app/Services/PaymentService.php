@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CreditLog;
 use App\Models\Payment;
+use App\Models\PaymentMethod;
 use App\Models\Transaction;
 use App\Services\ActivityLogger;
 use Filament\Notifications\Notification;
@@ -33,7 +34,6 @@ class PaymentService
                     'notes'              => $paymentData['notes'] ?? null,
                 ]);
 
-                // Cicilan pihak ketiga = dianggap full payment
                 if ($payment->isInstallment()) {
                     $totalPaid += $transaction->grand_total;
                 } else {
@@ -43,7 +43,6 @@ class PaymentService
 
             $this->updatePaymentStatus($transaction, $totalPaid);
 
-            // Di method processPayments(), setelah $this->updatePaymentStatus():
             $transaction->refresh();
             ActivityLogger::log(
                 'payment',
@@ -58,8 +57,6 @@ class PaymentService
 
     // =========================================================
     // ADD SINGLE PAYMENT (tambah bayar dari view/tabel)
-    // Mendukung overpayment untuk customer DO — kelebihan
-    // otomatis masuk deposit_balance customer
     // =========================================================
 
     public function addPayment(Transaction $transaction, array $paymentData): Payment
@@ -69,18 +66,37 @@ class PaymentService
             $remaining = (float) $transaction->amount_remaining;
 
             $customer = $transaction->customer;
-            $isDo = $customer && $customer->type === 'do';
+            $isDo     = $customer && $customer->type === 'do';
 
-            // Untuk end user: tetap blok overpayment
+            // Cek apakah metode yang dipilih adalah Deposit
+            $paymentMethod = PaymentMethod::find($paymentData['payment_method_id']);
+            $isDepositMethod = $paymentMethod && $paymentMethod->code === 'deposit';
+
+            // Jika pakai metode Deposit, validasi saldo deposit customer
+            if ($isDepositMethod && $isDo) {
+                $depositBalance = $customer->depositBalance();
+                if ($newAmount > $depositBalance) {
+                    throw ValidationException::withMessages([
+                        'amount' => 'Saldo deposit tidak mencukupi. Saldo deposit: Rp ' .
+                            number_format($depositBalance, 0, ',', '.') . '.',
+                    ]);
+                }
+                if ($newAmount > $remaining) {
+                    throw ValidationException::withMessages([
+                        'amount' => 'Jumlah melebihi sisa tagihan (Rp ' .
+                            number_format($remaining, 0, ',', '.') . ').',
+                    ]);
+                }
+            }
+
             if (!$isDo && $newAmount > $remaining) {
                 throw ValidationException::withMessages([
                     'amount' => 'Pembayaran melebihi sisa tagihan (Rp ' .
-                        number_format($transaction->amount_remaining, 0, ',', '.') . ').',
+                        number_format($remaining, 0, ',', '.') . ').',
                 ]);
             }
 
-             // Hitung applied amount dan overpaid
-            $overpaid      = $isDo ? max(0, $newAmount - $remaining) : 0;
+            $overpaid      = ($isDo && !$isDepositMethod) ? max(0, $newAmount - $remaining) : 0;
             $appliedAmount = min($newAmount, $remaining);
 
             $payment = Payment::create([
@@ -93,23 +109,39 @@ class PaymentService
                 'notes'              => $paymentData['notes'] ?? null,
             ]);
 
-            $totalPaid = $transaction->amount_paid + $appliedAmount;
+            // Jika metode Deposit → kurangi deposit_balance customer & catat di credit_logs
+            if ($isDepositMethod && $isDo) {
+                $depositBefore = $customer->depositBalance();
+                $customer->decrement('deposit_balance', $appliedAmount);
+                $customer->refresh();
+
+                CreditLog::create([
+                    'customer_id'    => $customer->id,
+                    'user_id'        => Auth::id(),
+                    'type'           => 'deposit_used',
+                    'amount'         => $appliedAmount,
+                    'credit_before'  => $depositBefore,
+                    'credit_after'   => $customer->depositBalance(),
+                    'reference_type' => 'transaction',
+                    'reference_id'   => $transaction->id,
+                    'notes'          => "Deposit dipakai (manual) untuk transaksi {$transaction->invoice_number}",
+                ]);
+            }
+
+            $totalPaid = (float) $transaction->amount_paid + $appliedAmount;
             $this->updatePaymentStatus($transaction, $totalPaid);
 
-             // ✅ Simpan kelebihan ke deposit customer DO
+            // Kelebihan bayar (non-deposit) masuk deposit
             if ($overpaid > 0 && $isDo) {
                 $this->addDeposit($customer, $overpaid, $transaction);
             }
 
-            // Di method addPayment(), setelah $this->updatePaymentStatus():
             $transaction->refresh();
-            $method = $payment->paymentMethod?->name ?? '-';
-
             ActivityLogger::payment(
                 $transaction,
                 $transaction->invoice_number,
                 $newAmount,
-                $method
+                $payment->paymentMethod?->name ?? '-'
             );
 
             return $payment;
@@ -117,37 +149,32 @@ class PaymentService
     }
 
     // =========================================================
-    // PAKAI DEPOSIT UNTUK TRANSAKSI
-    // Dipanggil dari TransactionService saat customer DO
-    // punya deposit dan masih ada sisa tagihan
+    // PAKAI DEPOSIT UNTUK MELUNASI TRANSAKSI
     // =========================================================
- 
+
     public function applyDeposit(Transaction $transaction): void
     {
         $customer = $transaction->customer;
- 
+
         if (!$customer || $customer->type !== 'do' || !$customer->hasDeposit()) {
             return;
         }
- 
+
         $transaction->refresh();
         $remaining = (float) $transaction->amount_remaining;
- 
+
         if ($remaining <= 0) return;
- 
+
         $useDeposit = min($customer->depositBalance(), $remaining);
- 
+
         DB::transaction(function () use ($transaction, $customer, $useDeposit) {
-            // Kurangi deposit
             $depositBefore = $customer->depositBalance();
+
+            // 1. Kurangi deposit customer
             $customer->decrement('deposit_balance', $useDeposit);
             $customer->refresh();
- 
-            // Kurangi credit_used juga karena tagihan berkurang
-            $newCreditUsed = max(0, (float) $customer->credit_used - $useDeposit);
-            $customer->update(['credit_used' => $newCreditUsed]);
- 
-            // Catat di credit_logs
+
+            // 2. Catat di credit_logs (audit trail deposit)
             CreditLog::create([
                 'customer_id'    => $customer->id,
                 'user_id'        => Auth::id(),
@@ -159,21 +186,30 @@ class PaymentService
                 'reference_id'   => $transaction->id,
                 'notes'          => "Deposit dipakai untuk transaksi {$transaction->invoice_number}",
             ]);
- 
-            // Update payment status transaksi
+
+            // 3. ✅ Buat record Payment dengan payment_method 'deposit'
+            //    Ini yang membuat amount_paid terupdate dan status berubah
+            $depositMethod = PaymentMethod::where('code', 'deposit')->first();
+
+            if ($depositMethod) {
+                Payment::create([
+                    'transaction_id'    => $transaction->id,
+                    'payment_method_id' => $depositMethod->id,
+                    'amount'            => $useDeposit,
+                    'payment_date'      => today()->toDateString(),
+                    'notes'             => "Dari deposit customer — saldo sebelum: Rp " 
+                                          . number_format($depositBefore, 0, ',', '.'),
+                ]);
+            }
+
+            // 4. Update amount_paid dan payment_status transaksi
             $totalPaid = (float) $transaction->amount_paid + $useDeposit;
             $this->updatePaymentStatus($transaction, $totalPaid);
- 
-            // Buat record payment dari deposit (opsional, untuk audit trail)
-            // Jika tidak mau buat payment record dari deposit, hapus bagian ini
-            // Payment::create([...]);
         });
     }
-    
+
     // =========================================================
     // RECALCULATE STATUS
-    // Dipanggil setelah edit atau hapus payment dari PaymentResource
-    // Hitung ulang dari semua payment yang masih ada di DB
     // =========================================================
 
     public function recalculateStatus(Transaction $transaction): void
@@ -181,12 +217,10 @@ class PaymentService
         DB::transaction(function () use ($transaction) {
             $transaction->refresh();
 
-            // Hitung ulang total dari semua payment yang tersisa
             $totalPaid = $transaction->payments()
                 ->with('paymentMethod')
                 ->get()
                 ->sum(function (Payment $payment) use ($transaction) {
-                    // Cicilan = dianggap lunas penuh
                     if ($payment->isInstallment()) {
                         return (float) $transaction->grand_total;
                     }
@@ -195,7 +229,6 @@ class PaymentService
 
             $this->updatePaymentStatus($transaction, $totalPaid);
 
-            // Di method recalculateStatus(), setelah $this->updatePaymentStatus():
             $transaction->refresh();
             ActivityLogger::log(
                 'updated',
@@ -216,12 +249,11 @@ class PaymentService
     {
         $grandTotal = (float) $transaction->grand_total;
         $remaining  = max(0, $grandTotal - $totalPaid);
-        $oldRemaining = (float) $transaction->amount_remaining; // ← simpan dulu
 
         $status = match (true) {
-            $totalPaid <= 0       => 'unpaid',
+            $totalPaid <= 0           => 'unpaid',
             $totalPaid >= $grandTotal => 'paid',
-            default               => 'partial',
+            default                   => 'partial',
         };
 
         $transaction->update([
@@ -229,14 +261,6 @@ class PaymentService
             'amount_remaining' => $remaining,
             'payment_status'   => $status,
         ]);
-
-        // ✅ Kurangi credit_used saat ada pembayaran masuk
-        $customer = $transaction->customer;
-        if ($customer && $customer->type === 'do' && $oldRemaining > $remaining) {
-            $paidAmount = $oldRemaining - $remaining;
-            $newCreditUsed = max(0, (float) $customer->credit_used - $paidAmount);
-            $customer->update(['credit_used' => $newCreditUsed]);
-        }
     }
 
     private function addDeposit($customer, float $amount, Transaction $transaction): void
@@ -244,7 +268,7 @@ class PaymentService
         $depositBefore = $customer->depositBalance();
         $customer->increment('deposit_balance', $amount);
         $customer->refresh();
- 
+
         CreditLog::create([
             'customer_id'    => $customer->id,
             'user_id'        => Auth::id(),
@@ -254,12 +278,12 @@ class PaymentService
             'credit_after'   => $customer->depositBalance(),
             'reference_type' => 'transaction',
             'reference_id'   => $transaction->id,
-            'notes'          => "Kelebihan bayar transaksi {$transaction->invoice_number}",
+            'notes'          => "Kelebihan bayar transaksi {$transaction->invoice_number} masuk deposit.",
         ]);
- 
+
         Notification::make()
-            ->warning()
-            ->title('Kelebihan Pembayaran — Disimpan sebagai Deposit')
+            ->success()
+            ->title('Kelebihan Bayar — Masuk Deposit')
             ->body('Rp ' . number_format($amount, 0, ',', '.') . ' disimpan sebagai deposit ' . $customer->name . '.')
             ->send();
     }

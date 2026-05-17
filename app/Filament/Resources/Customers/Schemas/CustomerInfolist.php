@@ -17,6 +17,7 @@ class CustomerInfolist
 
         return $schema->schema([
 
+            // ── Info dasar ───────────────────────────────────────────
             Section::make()
                 ->columns(3)
                 ->schema([
@@ -25,49 +26,32 @@ class CustomerInfolist
                     TextEntry::make('type')
                         ->label('Tipe')->badge()
                         ->color(fn($state) => $state === 'do' ? 'primary' : 'gray')
-                        ->formatStateUsing(fn($state) => $state === 'do' ? 'DO / Tempo' : 'End User'),
+                        ->formatStateUsing(fn($state) => $state === 'do' ? 'DO' : 'End User'),
                     TextEntry::make('phone')->label('No. HP')->placeholder('—'),
                     TextEntry::make('address')->label('Alamat')->placeholder('—')->columnSpanFull(),
                     IconEntry::make('is_active')->label('Status')->boolean(),
                 ]),
 
-            // ── Panel Kredit ─────────────────────────────────────────
-            Section::make('Informasi Kredit & Deposit')
+            // ── Panel Deposit (khusus DO) ────────────────────────────
+            Section::make('Saldo Deposit')
                 ->visible(fn($record) => $record->type === 'do')
-                ->columns(4)
+                ->columns(3)
                 ->schema([
-                    TextEntry::make('credit_limit')
-                        ->label('Limit Kredit')->money('IDR')
-                        ->color('primary')->weight('bold'),
-
-                    TextEntry::make('credit_used')
-                        ->label('Kredit Terpakai')->money('IDR')
-                        ->color(fn($record) => $record->credit_used > 0 ? 'warning' : 'gray'),
-
-                    TextEntry::make('available_credit')
-                        ->label('Sisa Kredit')
-                        ->getStateUsing(fn($record) => $record->availableCredit())
-                        ->money('IDR')
-                        ->color(fn($record) => $record->availableCredit() <= 0 ? 'danger' : 'success')
-                        ->weight('bold'),
-
-                    TextEntry::make('credit_usage_percent')
-                        ->label('Penggunaan')
-                        ->getStateUsing(fn($record) => $record->creditUsagePercent() . '%')
-                        ->color(fn($record) => match (true) {
-                            $record->creditUsagePercent() >= 90 => 'danger',
-                            $record->creditUsagePercent() >= 60 => 'warning',
-                            default                             => 'success',
-                        }),
-
-                    // ✅ Deposit balance
                     TextEntry::make('deposit_balance')
                         ->label('Saldo Deposit')
                         ->money('IDR')
-                        ->color(fn($record) => $record->deposit_balance > 0 ? 'success' : 'gray')
-                        ->weight(fn($record) => $record->deposit_balance > 0 ? 'bold' : 'normal')
-                        ->helperText('Kelebihan bayar yang tersimpan, otomatis dipakai untuk transaksi berikutnya.')
-                        ->columnSpan(2),
+                        ->color(fn($record) => match (true) {
+                            $record->deposit_balance <= 0     => 'danger',
+                            $record->deposit_balance < 500000 => 'warning',
+                            default                           => 'success',
+                        })
+                        ->weight('bold')
+                        ->size('xl')
+                        ->helperText(fn($record) => match (true) {
+                            $record->deposit_balance <= 0     => '⚠ Deposit habis — customer tidak bisa order.',
+                            $record->deposit_balance < 500000 => '⚠ Saldo menipis.',
+                            default                           => 'Deposit aktif.',
+                        }),
 
                     TextEntry::make('default_discount_display')
                         ->label('Diskon Default')
@@ -76,8 +60,8 @@ class CustomerInfolist
                         ->columnSpan(2),
                 ]),
 
-            // ── Riwayat Kredit ───────────────────────────────────────
-            Section::make('Riwayat Kredit & Deposit')
+            // ── Riwayat Deposit ─────────────────────────────────────
+            Section::make('Riwayat Deposit')
                 ->visible(fn($record) => $record->type === 'do')
                 ->collapsed()
                 ->schema([
@@ -95,16 +79,27 @@ class CustomerInfolist
                             TextEntry::make('amount')
                                 ->label('Jumlah')
                                 ->formatStateUsing(
-                                    fn($record) => ($record->isCredit() ? '+ ' : '- ') .
+                                    fn($record) => ($record->isDebit() ? '+ ' : '- ') .
                                         'Rp ' . number_format($record->amount, 0, ',', '.')
                                 )
-                                ->color(fn($record) => $record->isCredit() ? 'success' : 'danger'),
+                                ->color(fn($record) => $record->isDebit() ? 'success' : 'danger'),
 
                             TextEntry::make('credit_before')
-                                ->label('Sebelum')->money('IDR'),
+                                ->label('Saldo Sebelum')
+                                ->formatStateUsing(fn($state) => 'Rp ' . number_format($state, 0, ',', '.')),
 
                             TextEntry::make('credit_after')
-                                ->label('Sesudah')->money('IDR')->weight('bold'),
+                                ->label('Saldo Sesudah')
+                                ->formatStateUsing(fn($state) => 'Rp ' . number_format($state, 0, ',', '.'))
+                                ->weight('bold'),
+
+                            TextEntry::make('paymentMethod.name')
+                                ->label('Metode Bayar')
+                                ->placeholder('—'),
+
+                            TextEntry::make('reference_number')
+                                ->label('No. Referensi')
+                                ->placeholder('—'),
 
                             TextEntry::make('user.name')
                                 ->label('Oleh'),
@@ -112,7 +107,7 @@ class CustomerInfolist
                             TextEntry::make('notes')
                                 ->label('Keterangan')->placeholder('—')->columnSpanFull(),
                         ])
-                        ->columns(3),
+                        ->columns(4),
                 ]),
 
             // ── Riwayat Transaksi ────────────────────────────────────

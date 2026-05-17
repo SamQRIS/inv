@@ -8,7 +8,6 @@ use App\Models\Transaction;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -23,13 +22,11 @@ class SalesReportsTable
     public static function configure(Table $table): Table
     {
         return $table
-            // ->modifyQueryUsing(
-            //     fn(Builder $q) => $q
-            //         ->with(['customer', 'payments.paymentMethod'])
-            //         ->whereBetween('transaction_date', [
-            //             now()->startOfMonth()->toDateString(),
-            //             now()->toDateString(),
-            //         ])
+            // Default: tampilkan bulan ini saja agar tidak load semua data
+            // ->modifyQueryUsing(fn(Builder $q) => $q
+            //     ->with(['customer'])
+            //     ->whereMonth('transaction_date', now()->month)
+            //     ->whereYear('transaction_date', now()->year)
             // )
             ->columns([
                 TextColumn::make('transaction_date')
@@ -73,23 +70,25 @@ class SalesReportsTable
                     ->label('Sisa')
                     ->money('IDR')
                     ->color(fn($record) => $record->amount_remaining > 0 ? 'danger' : 'success'),
-                TextColumn::make('payment_status')
-                    ->label('Status Transaksi')
-                    ->badge()
+
+                BadgeColumn::make('payment_status')
+                    ->label('Status')
                     ->colors([
                         'danger'  => 'unpaid',
                         'warning' => 'partial',
                         'success' => 'paid',
+                        'gray'    => fn($s) => in_array($s, ['void', 'cancelled']),
                     ])
                     ->formatStateUsing(fn($state) => match ($state) {
-                        'unpaid'  => 'Belum Lunas',
-                        'partial' => 'Sebagian',
-                        'paid'    => 'Lunas',
-                        default   => $state,
+                        'unpaid'    => 'Belum Lunas',
+                        'partial'   => 'Sebagian',
+                        'paid'      => 'Lunas',
+                        'void'      => 'Void',
+                        'cancelled' => 'Batal',
+                        default     => $state,
                     }),
             ])
             ->filters([
-                // Filter periode — WAJIB ada di laporan
                 Filter::make('period')
                     ->label('Periode')
                     ->schema([
@@ -105,13 +104,17 @@ class SalesReportsTable
                             ->displayFormat('d/m/Y'),
                     ])
                     ->modifyQueryUsing(function (Builder $query, array $data) {
+                        // Override modifyQueryUsing default dengan filter pilihan user
+                        if (!blank($data['from'] ?? null) || !blank($data['until'] ?? null)) {
+                            // Reset filter bulan ini dari modifyQueryUsing
+                            $query->whereRaw('1=1');
+                        }
                         if (!blank($data['from'] ?? null)) {
                             $query->whereDate('transaction_date', '>=', $data['from']);
                         }
                         if (!blank($data['until'] ?? null)) {
                             $query->whereDate('transaction_date', '<=', $data['until']);
                         }
-                        return $query;
                     })
                     ->indicateUsing(function (array $data): array {
                         $i = [];
@@ -122,7 +125,13 @@ class SalesReportsTable
 
                 SelectFilter::make('payment_status')
                     ->label('Status Bayar')
-                    ->options(['unpaid' => 'Belum Bayar', 'partial' => 'Sebagian', 'paid' => 'Lunas']),
+                    ->options([
+                        'unpaid'    => 'Belum Bayar',
+                        'partial'   => 'Sebagian',
+                        'paid'      => 'Lunas',
+                        'void'      => 'Void',
+                        'cancelled' => 'Dibatalkan',
+                    ]),
 
                 SelectFilter::make('customer_id')
                     ->label('Customer')
@@ -132,7 +141,6 @@ class SalesReportsTable
             ->filtersLayout(FiltersLayout::AboveContent)
             ->filtersFormColumns(3)
             ->headerActions([
-                // Export Excel
                 Action::make('export')
                     ->label('Export Excel')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -152,12 +160,9 @@ class SalesReportsTable
             ])
             ->defaultSort('transaction_date', 'desc')
             ->striped()
-            // Summary total di bawah tabel
             ->paginated([25, 50, 100, 'all'])
             ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+                BulkActionGroup::make([DeleteBulkAction::make()]),
             ]);
     }
 
@@ -167,16 +172,11 @@ class SalesReportsTable
 
         return response()->streamDownload(function () use ($records) {
             $handle = fopen('php://output', 'w');
-            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM UTF-8
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
-            // Header
             fputcsv($handle, ['No. Invoice', 'Tanggal', 'Customer', 'Subtotal', 'Diskon', 'Grand Total', 'Dibayar', 'Sisa', 'Status']);
 
-            $totalSubtotal    = 0;
-            $totalDiskon      = 0;
-            $totalGrandTotal  = 0;
-            $totalPaid        = 0;
-            $totalRemaining   = 0;
+            $totals = ['subtotal' => 0, 'diskon' => 0, 'grand' => 0, 'paid' => 0, 'remaining' => 0];
 
             foreach ($records as $trx) {
                 fputcsv($handle, [
@@ -189,24 +189,24 @@ class SalesReportsTable
                     $trx->amount_paid,
                     $trx->amount_remaining,
                     match ($trx->payment_status) {
-                        'unpaid' => 'Belum Bayar',
-                        'partial' => 'Sebagian',
-                        'paid' => 'Lunas',
-                        default => $trx->payment_status,
+                        'unpaid'    => 'Belum Bayar',
+                        'partial'   => 'Sebagian',
+                        'paid'      => 'Lunas',
+                        'void'      => 'Void',
+                        'cancelled' => 'Dibatalkan',
+                        default     => $trx->payment_status,
                     },
                 ]);
 
-                $totalSubtotal   += $trx->subtotal;
-                $totalDiskon     += $trx->discount_amount;
-                $totalGrandTotal += $trx->grand_total;
-                $totalPaid       += $trx->amount_paid;
-                $totalRemaining  += $trx->amount_remaining;
+                $totals['subtotal']   += $trx->subtotal;
+                $totals['diskon']     += $trx->discount_amount;
+                $totals['grand']      += $trx->grand_total;
+                $totals['paid']       += $trx->amount_paid;
+                $totals['remaining']  += $trx->amount_remaining;
             }
 
-            // Baris total
             fputcsv($handle, []);
-            fputcsv($handle, ['TOTAL', '', '', $totalSubtotal, $totalDiskon, $totalGrandTotal, $totalPaid, $totalRemaining, '']);
-
+            fputcsv($handle, ['TOTAL', '', '', $totals['subtotal'], $totals['diskon'], $totals['grand'], $totals['paid'], $totals['remaining'], '']);
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }

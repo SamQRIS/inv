@@ -35,8 +35,16 @@ class DeliveriesTable
                     ->label('No. DO')
                     ->searchable()
                     ->sortable()
-                    ->copyable(),
-
+                    ->copyable()
+                    ->description(fn(Delivery $record) => match ($record->transaction?->payment_status) {
+                        'void'      => '⛔ Transaksi Void' . ($record->transaction?->cancellation_reason ? ' — ' . $record->transaction->cancellation_reason : ''),
+                        'cancelled' => '🚫 Transaksi Dibatalkan' . ($record->transaction?->cancellation_reason ? ' — ' . $record->transaction->cancellation_reason : ''),
+                        default     => null,
+                    })
+                    ->color(
+                        fn(Delivery $record) => in_array($record->transaction?->payment_status, ['void', 'cancelled'])
+                            ? 'danger' : null
+                    ),
                 TextColumn::make('transaction.invoice_number')
                     ->label('Invoice')
                     ->searchable(),
@@ -56,13 +64,32 @@ class DeliveriesTable
                         'gray'    => 'pending',
                         'warning' => 'partial',
                         'success' => 'completed',
+                        'danger'  => 'cancelled', // ← TAMBAH
                     ])
                     ->formatStateUsing(fn($state) => match ($state) {
                         'pending'   => 'Menunggu',
                         'partial'   => 'Sebagian',
                         'completed' => 'Selesai',
+                        'cancelled' => '⛔ Dibatalkan', // ← TAMBAH
                         default     => $state,
                     }),
+                // BadgeColumn::make('transaction.payment_status')
+                //     ->label('Status Transaksi')
+                //     ->colors([
+                //         'danger'  => 'unpaid',
+                //         'warning' => 'partial',
+                //         'success' => 'paid',
+                //         'gray'    => 'void',
+                //         'gray'    => 'cancelled',
+                //     ])
+                //     ->formatStateUsing(fn($state) => match ($state) {
+                //         'unpaid'    => 'Belum Bayar',
+                //         'partial'   => 'Sebagian',
+                //         'paid'      => 'Lunas',
+                //         'void'      => '⛔ Void',
+                //         'cancelled' => '🚫 Dibatalkan',
+                //         default     => $state,
+                //     }),
 
                 TextColumn::make('shipments_count')
                     ->label('Pengiriman')
@@ -75,13 +102,35 @@ class DeliveriesTable
                         'partial'   => 'Sebagian',
                         'completed' => 'Selesai',
                     ]),
+                SelectFilter::make('transaction_status')
+                    ->label('Status Transaksi')
+                    ->options([
+                        'unpaid'    => 'Belum Bayar',
+                        'partial'   => 'Sebagian',
+                        'paid'      => 'Lunas',
+                        'void'      => 'Void',
+                        'cancelled' => 'Dibatalkan',
+                    ])
+                    ->modifyQueryUsing(function ($query, array $data) {
+                        if (blank($data['value'] ?? null)) return $query;
+                        return $query->whereHas(
+                            'transaction',
+                            fn($q) =>
+                            $q->where('payment_status', $data['value'])
+                        );
+                    }),
             ])
             ->recordActions([
                 Action::make('process_shipment')
                     ->label('Kirim')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
-                    ->visible(fn(Delivery $record) => $record->status !== 'completed')
+                    // ✅ SESUDAH — tambah cek void/cancelled:
+                    ->visible(
+                        fn(Delivery $record) =>
+                        $record->status !== 'completed' &&
+                            !in_array($record->transaction->payment_status, ['void', 'cancelled'])
+                    )
                     ->schema(function (Delivery $record) {
 
                         // Resolve warehouse default untuk preview stok
@@ -106,8 +155,8 @@ class DeliveriesTable
                                 return [
                                     'delivery_item_id'   => $item->id,
                                     'product_info'       => $item->product->name .
-                                                            ' [' . $item->product->sku . ']' .
-                                                            $stockInfo,
+                                        ' [' . $item->product->sku . ']' .
+                                        $stockInfo,
                                     'qty_remaining_info' => (string) $item->qtyRemaining(),
                                     'qty_shipped'        => $item->qtyRemaining(),
                                 ];
@@ -200,7 +249,6 @@ class DeliveriesTable
                                 ->success()
                                 ->title('Pengiriman berhasil diproses.')
                                 ->send();
-
                         } catch (\Illuminate\Validation\ValidationException $e) {
                             // Tampilkan semua error stok/qty sebagai notifikasi merah
                             $messages = collect($e->errors())->flatten()->implode("\n");

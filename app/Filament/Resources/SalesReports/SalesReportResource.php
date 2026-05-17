@@ -38,11 +38,11 @@ class SalesReportResource extends Resource
         return false;
     }
 
-    // SalesReportResource.php
-    // SalesReportResource.php
+    // ✅ SESUDAH:
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
         return Transaction::query()
+            ->whereNotIn('payment_status', ['void', 'cancelled']) // ← TAMBAH INI
             ->whereBetween('transaction_date', [
                 now()->startOfMonth()->toDateString(),
                 now()->toDateString(),

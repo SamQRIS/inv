@@ -38,34 +38,71 @@ class TransactionsTable
             ->modifyQueryUsing(fn($query) => $query->with(['customer', 'payments']))
             ->columns([
                 TextColumn::make('invoice_number')
-                    ->label('No. Invoice')->searchable()->sortable()->copyable()->weight('bold'),
+                    ->label('No. Invoice')->searchable()->sortable()->copyable()->weight('bold')
+                    // ->description(fn(Transaction $record) => match ($record->payment_status) {
+                    //     'void'      => '⛔ Void' . ($record->cancellation_reason ? ' — ' . $record->cancellation_reason : ''),
+                    //     'cancelled' => '🚫 Dibatalkan' . ($record->cancellation_reason ? ' — ' . $record->cancellation_reason : ''),
+                    //     default     => null,
+                    // })
+                    ->color(
+                        fn(Transaction $record) => in_array($record->payment_status, ['void', 'cancelled'])
+                            ? 'danger' : null
+                    ),
                 TextColumn::make('transaction_date')
                     ->label('Tanggal')->date('d/m/Y')->sortable(),
                 TextColumn::make('customer.name')
                     ->label('Customer')->searchable()->placeholder('—')->limit(25),
                 TextColumn::make('grand_total')
                     ->label('Grand Total')->money('IDR')->sortable(),
+                TextColumn::make('amount_paid')
+                    ->label('Dibayar')->money('IDR')->sortable(),
                 TextColumn::make('amount_remaining')
                     ->label('Sisa')->money('IDR')
                     ->color(fn($record) => $record->amount_remaining > 0 ? 'danger' : 'success')
                     ->placeholder('—'),
+                TextColumn::make('items_backorder_count')
+                    ->label('Backorder')
+                    ->getStateUsing(
+                        fn(Transaction $record) =>
+                        $record->items->where('is_backorder', true)->count()
+                    )
+                    ->badge()
+                    ->color(fn($state) => $state > 0 ? 'warning' : 'danger')
+                    ->formatStateUsing(fn($state) => $state > 0 ? "⚠️ {$state} item" : "❌ Tidak ada")
+                    ->placeholder(''),
+                // ✅ SESUDAH:
                 BadgeColumn::make('payment_status')
                     ->label('Bayar')
-                    ->colors(['danger' => 'unpaid', 'warning' => 'partial', 'success' => 'paid'])
+                    ->colors([
+                        'danger'  => 'unpaid',
+                        'warning' => 'partial',
+                        'success' => 'paid',
+                        'gray'    => fn($state) => in_array($state, ['void', 'cancelled']),
+                    ])
                     ->formatStateUsing(fn($state) => match ($state) {
-                        'unpaid' => 'Belum Bayar',
-                        'partial' => 'Sebagian',
-                        'paid' => 'Lunas',
-                        default => $state,
+                        'unpaid'    => 'Belum Bayar',
+                        'partial'   => 'Sebagian',
+                        'paid'      => 'Lunas',
+                        'void'      => '⛔ Void',
+                        'cancelled' => '🚫 Batal',
+                        default     => $state,
                     }),
                 BadgeColumn::make('delivery_status')
                     ->label('Kirim')
-                    ->colors(['secondary' => 'pending', 'warning' => 'partial', 'success' => 'delivered'])
+                    ->colors([
+                        'gray'    => 'pending',
+                        'info'    => 'processing',   // ← tambah
+                        'warning' => 'partial',
+                        'success' => 'delivered',
+                        'danger'  => 'cancelled',
+                    ])
                     ->formatStateUsing(fn($state) => match ($state) {
-                        'pending' => 'Menunggu',
-                        'partial' => 'Sebagian',
-                        'delivered' => 'Terkirim',
-                        default => $state,
+                        'pending'    => 'Menunggu',
+                        'processing' => 'Diproses', // ← tambah
+                        'partial'    => 'Sebagian',
+                        'delivered'  => 'Terkirim',
+                        'cancelled'  => 'Batal',
+                        default      => $state,
                     }),
             ])
             ->filters([
@@ -76,7 +113,7 @@ class TransactionsTable
                     ->label('Status Kirim')
                     ->options(['pending' => 'Menunggu', 'partial' => 'Sebagian', 'delivered' => 'Terkirim']),
                 Filter::make('transaction_date')
-                    ->form([
+                    ->schema([
                         DatePicker::make('from')->label('Dari')->native(false)->displayFormat('d/m/Y'),
                         DatePicker::make('until')->label('Sampai')->native(false)->displayFormat('d/m/Y'),
                     ])
@@ -85,6 +122,13 @@ class TransactionsTable
                             ->when($data['from'],  fn($q) => $q->whereDate('transaction_date', '>=', $data['from']))
                             ->when($data['until'], fn($q) => $q->whereDate('transaction_date', '<=', $data['until']))
                     ),
+                Filter::make('has_backorder')
+                    ->label('Ada Backorder')
+                    ->query(fn($query) => $query->whereHas(
+                        'items',
+                        fn($q) =>
+                        $q->where('is_backorder', true)
+                    )),
             ])
             ->recordActions([
                 ActionGroup::make([
@@ -96,7 +140,11 @@ class TransactionsTable
                         ->label('Tambah Pembayaran')
                         ->icon('heroicon-o-banknotes')
                         ->color('warning')
-                        ->visible(fn(Transaction $record) => in_array($record->payment_status, ['unpaid', 'partial']))
+                        ->visible(
+                            fn(Transaction $record) =>
+                            in_array($record->payment_status, ['unpaid', 'partial']) &&
+                                !in_array($record->payment_status, ['void', 'cancelled'])
+                        )
                         ->schema(fn(Transaction $record) => self::paymentForm($record))
                         ->action(fn(Transaction $record, array $data) => self::handleAddPayment($record, $data)),
 
@@ -106,18 +154,94 @@ class TransactionsTable
                         ->color('gray')
                         ->url(fn(Transaction $record) => route('transaction.invoice', $record))
                         ->openUrlInNewTab(),
+                    // Tombol Buat DO — hidden jika sudah ada DO atau void/cancelled
                     Action::make('generate_do')
                         ->label('Buat Delivery Order')
                         ->icon('heroicon-o-truck')
                         ->color('success')
                         ->requiresConfirmation()
                         ->action(function (Transaction $record) {
-                            app(DeliveryService::class)->createDelivery($record);
-                            Notification::make()->success()->title('DO berhasil dibuat.')->send();
+                            try {
+                                app(DeliveryService::class)->createDelivery($record);
+                                Notification::make()->success()->title('DO berhasil dibuat.')->send();
+                            } catch (\Illuminate\Validation\ValidationException $e) {
+                                Notification::make()->danger()
+                                    ->title('Gagal')
+                                    ->body(collect($e->errors())->flatten()->first())
+                                    ->send();
+                            }
                         })
-                        ->visible(fn(Transaction $record) => $record->delivery_status === 'pending'),
-                    DeleteAction::make()
+                        // ✅ Hanya tampil jika masih pending dan belum ada DO
+                        ->visible(
+                            fn(Transaction $record) =>
+                            $record->delivery_status === 'pending' &&
+                                !in_array($record->payment_status, ['void', 'cancelled'])
+                        ),
+                    Action::make('void')
+                        ->label('Void Transaksi')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->visible(fn(Transaction $record) => !in_array($record->payment_status, ['void', 'cancelled']))
                         ->requiresConfirmation()
+                        ->modalHeading('Void Transaksi')
+                        ->modalDescription('Void akan membatalkan semua efek finansial transaksi ini. Payment yang sudah masuk akan dikembalikan ke deposit customer (untuk DO). Tindakan ini tidak dapat dibatalkan.')
+                        ->schema([
+                            \Filament\Forms\Components\Textarea::make('reason')
+                                ->label('Alasan Void')
+                                ->required()
+                                ->placeholder('Contoh: Barang tidak tersedia, kesalahan input, dll'),
+                        ])
+                        ->action(function (Transaction $record, array $data) {
+                            try {
+                                app(\App\Services\VoidCancelService::class)->void($record, $data['reason']);
+                                \Filament\Notifications\Notification::make()
+                                    ->success()
+                                    ->title('Transaksi berhasil di-void.')
+                                    ->send();
+                            } catch (\Illuminate\Validation\ValidationException $e) {
+                                \Filament\Notifications\Notification::make()
+                                    ->danger()
+                                    ->title('Gagal')
+                                    ->body(collect($e->errors())->flatten()->first())
+                                    ->send();
+                            }
+                        }),
+
+                    // ── CANCEL ACTION ────────────────────────────────────────────
+                    Action::make('cancel')
+                        ->label('Cancel Transaksi')
+                        // ->icon('heroicon-o-ban')
+                        ->icon('heroicon-o-x-mark')
+                        ->color('warning')
+                        ->visible(
+                            fn(Transaction $record) =>
+                            !in_array($record->payment_status, ['void', 'cancelled']) &&
+                                $record->delivery_status !== 'delivered'
+                        )
+                        ->requiresConfirmation()
+                        ->modalHeading('Cancel Transaksi')
+                        ->modalDescription('Cancel hanya untuk transaksi yang belum ada pengiriman. Payment yang sudah masuk akan dikembalikan ke deposit.')
+                        ->schema([
+                            \Filament\Forms\Components\Textarea::make('reason')
+                                ->label('Alasan Cancel')
+                                ->required()
+                                ->placeholder('Contoh: Customer membatalkan order, dll'),
+                        ])
+                        ->action(function (Transaction $record, array $data) {
+                            try {
+                                app(\App\Services\VoidCancelService::class)->cancel($record, $data['reason']);
+                                \Filament\Notifications\Notification::make()
+                                    ->success()
+                                    ->title('Transaksi berhasil dibatalkan.')
+                                    ->send();
+                            } catch (\Illuminate\Validation\ValidationException $e) {
+                                \Filament\Notifications\Notification::make()
+                                    ->danger()
+                                    ->title('Gagal')
+                                    ->body(collect($e->errors())->flatten()->first())
+                                    ->send();
+                            }
+                        }),
                 ]),
             ])
             ->toolbarActions([

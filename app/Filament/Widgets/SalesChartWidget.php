@@ -59,9 +59,11 @@ class SalesChartWidget extends ChartWidget
         $daysInMonth = $start->daysInMonth;
 
         // Ambil data penjualan per hari
+        // ✅ SESUDAH:
         $sales = Transaction::selectRaw('DAY(transaction_date) as day, SUM(grand_total) as total, COUNT(*) as count')
             ->whereMonth('transaction_date', $date->month)
             ->whereYear('transaction_date', $date->year)
+            ->whereNotIn('payment_status', ['void', 'cancelled']) // ← TAMBAH
             ->groupBy('day')
             ->pluck('total', 'day');
 
@@ -69,6 +71,7 @@ class SalesChartWidget extends ChartWidget
         $payments = Payment::selectRaw('DAY(payment_date) as day, SUM(amount) as total')
             ->whereMonth('payment_date', $date->month)
             ->whereYear('payment_date', $date->year)
+            // ->whereNotIn('status', ['void', 'cancelled']) // ← TAMBAH
             ->groupBy('day')
             ->pluck('total', 'day');
 
@@ -112,13 +115,16 @@ class SalesChartWidget extends ChartWidget
         $isThisYear = $this->filter === 'this_year';
         $year       = $isThisYear ? now()->year : now()->subYear()->year;
 
+        // ✅ SESUDAH:
         $sales = Transaction::selectRaw('MONTH(transaction_date) as month, SUM(grand_total) as total, COUNT(*) as count')
             ->whereYear('transaction_date', $year)
+            ->whereNotIn('payment_status', ['void', 'cancelled']) // ← TAMBAH
             ->groupBy('month')
             ->pluck('total', 'month');
 
         $prevSales = Transaction::selectRaw('MONTH(transaction_date) as month, SUM(grand_total) as total')
             ->whereYear('transaction_date', $year - 1)
+            ->whereNotIn('payment_status', ['void', 'cancelled']) // ← TAMBAH
             ->groupBy('month')
             ->pluck('total', 'month');
 

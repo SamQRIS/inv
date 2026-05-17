@@ -77,7 +77,7 @@ class DocumentController extends Controller
                 'defaultFont'          => 'Arial',
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled'      => false,
-                'dpi'                  => 60,
+                'dpi'                  => 72,
             ]);
 
         return $pdf->download("SuratJalan-{$delivery->do_number}.pdf");

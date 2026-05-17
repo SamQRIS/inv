@@ -25,6 +25,24 @@ class DeliveryService
 
     public function createDelivery(Transaction $transaction): Delivery
     {
+        // ✅ TAMBAH INI — blok jika transaksi void/cancelled
+        if (in_array($transaction->payment_status, ['void', 'cancelled'])) {
+            throw ValidationException::withMessages([
+                'transaction' => 'Tidak bisa membuat DO untuk transaksi yang sudah ' .
+                    ($transaction->payment_status === 'void' ? 'di-void' : 'dibatalkan') . '.',
+            ]);
+        }
+
+        // ✅ Cegah duplikasi DO — cek apakah sudah ada DO aktif
+        $existingDO = Delivery::where('transaction_id', $transaction->id)
+            ->where('status', '!=', 'cancelled')
+            ->exists();
+
+        if ($existingDO) {
+            throw ValidationException::withMessages([
+                'transaction' => 'Delivery Order untuk transaksi ini sudah dibuat sebelumnya.',
+            ]);
+        }
         return DB::transaction(function () use ($transaction) {
             $delivery = Delivery::create([
                 'do_number'      => Delivery::generateDoNumber(),
@@ -43,6 +61,9 @@ class DeliveryService
                     'qty_delivered'       => 0,
                 ]);
             }
+
+            // ✅ Update delivery_status transaksi jadi 'processing'
+            $transaction->update(['delivery_status' => 'processing']);
 
             return $delivery->fresh('items');
         });
@@ -67,6 +88,15 @@ class DeliveryService
      */
     public function processShipment(Delivery $delivery, array $shipmentData): Shipment
     {
+        // ✅ TAMBAH INI — blok jika transaksi void/cancelled
+        $transaction = $delivery->transaction;
+        if (in_array($transaction->payment_status, ['void', 'cancelled'])) {
+            throw ValidationException::withMessages([
+                'transaction' => 'Tidak bisa memproses pengiriman untuk transaksi yang sudah ' .
+                    ($transaction->payment_status === 'void' ? 'di-void' : 'dibatalkan') . '.',
+            ]);
+        }
+
         return DB::transaction(function () use ($delivery, $shipmentData) {
 
             // ── Resolve warehouse ────────────────────────────────────
@@ -92,7 +122,7 @@ class DeliveryService
                 // Cek 1: qty kirim tidak melebihi sisa DO
                 if ($qtyShipped > $remaining) {
                     $errors[] = "• {$product->name}: qty kirim ({$qtyShipped}) " .
-                                "melebihi sisa DO ({$remaining}).";
+                        "melebihi sisa DO ({$remaining}).";
                     continue;
                 }
 
@@ -100,8 +130,8 @@ class DeliveryService
                 $stockAtWarehouse = $product->stockAt($itemWarehouse);
                 if ($stockAtWarehouse < $qtyShipped) {
                     $errors[] = "• {$product->name}: stok di gudang [{$itemWarehouse->name}] " .
-                                "tidak mencukupi. Tersedia: {$stockAtWarehouse}, " .
-                                "Dibutuhkan: {$qtyShipped}.";
+                        "tidak mencukupi. Tersedia: {$stockAtWarehouse}, " .
+                        "Dibutuhkan: {$qtyShipped}.";
                 }
             }
 
@@ -203,7 +233,7 @@ class DeliveryService
         $allDelivered = $delivery->items->every(fn($item) => $item->isFullyDelivered());
         $anyDelivered = $delivery->items->some(fn($item) => $item->qty_delivered > 0);
 
-        $status = match(true) {
+        $status = match (true) {
             $allDelivered => 'completed',
             $anyDelivered => 'partial',
             default       => 'pending',
@@ -216,7 +246,7 @@ class DeliveryService
         $allCompleted = $transaction->deliveries->every(fn($d) => $d->status === 'completed');
         $anyShipped   = $transaction->deliveries->some(fn($d) => $d->status !== 'pending');
 
-        $txStatus = match(true) {
+        $txStatus = match (true) {
             $allCompleted => 'delivered',
             $anyShipped   => 'partial',
             default       => 'pending',
