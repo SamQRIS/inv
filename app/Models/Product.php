@@ -31,6 +31,7 @@ class Product extends Model
         'stock_quantity',  // total agregat dari semua gudang (di-sync otomatis)
         'minimum_stock',   // minimum global
         'is_active',
+        'product_type'
     ];
 
     protected $casts = [
@@ -156,5 +157,45 @@ class Product extends Model
     {
         $this->unsetRelations();
         return array_keys($this->getAttributes());
+    }
+
+    // Tambah relasi:
+    public function prices()
+    {
+        return $this->hasMany(\App\Models\ProductPrice::class);
+    }
+
+    // Helper: cari harga otomatis berdasarkan size + fabric
+    public function getPriceFor(?int $sizeId, ?int $fabricId = null): ?float
+    {
+        if (!$sizeId) return $this->selling_price ?: null;
+
+        return \App\Models\ProductPrice::findPrice($this->id, $sizeId, $fabricId)
+            ?? \App\Models\ProductPrice::findPrice($this->id, $sizeId, null)
+            ?? $this->selling_price
+            ?: null;
+    }
+
+    // Generate nama produk otomatis dari variasi
+    public function buildProductName(?string $sizeName, ?string $fabricName, ?string $colorName): string
+    {
+        return trim(implode(' ', array_filter([
+            $this->name,
+            $sizeName,
+            $fabricName,
+            $colorName,
+        ])));
+    }
+
+    // Cek apakah produk butuh pilih ukuran
+    public function needsSize(): bool
+    {
+        return in_array($this->product_type, ['divan', 'kasur']);
+    }
+
+    // Cek apakah produk butuh pilih kain
+    public function needsFabric(): bool
+    {
+        return $this->product_type === 'divan';
     }
 }

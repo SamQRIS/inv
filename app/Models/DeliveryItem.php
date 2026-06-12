@@ -16,12 +16,20 @@ class DeliveryItem extends Model
         'product_id',
         'qty_ordered',
         'qty_delivered',
+
+        // ── Display / Konsinyasi ─────────────────────────────
+        'is_display',
+        'display_location',
     ];
 
     protected $casts = [
         'qty_ordered'   => 'integer',
         'qty_delivered' => 'integer',
+        'is_display'    => 'boolean',
     ];
+
+
+    // ── Relasi ───────────────────────────────────────────────
 
     public function delivery(): BelongsTo
     {
@@ -37,6 +45,8 @@ class DeliveryItem extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    // ── Helpers ──────────────────────────────────────────────
 
     public function qtyRemaining(): int
     {

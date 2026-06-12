@@ -29,6 +29,12 @@ class DeliveryResource extends Resource
 
     protected static ?string $navigationLabel = 'Delivery Order';
 
+    protected static ?string $modelLabel = 'Pengiriman';
+
+    protected static ?string $pluralModelLabel = 'Pengiriman';
+
+    protected static ?string $slug = 'pengiriman';
+
     public static function form(Schema $schema): Schema
     {
         return DeliveryForm::configure($schema);

@@ -6,6 +6,7 @@ use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Filament\Resources\Products\Pages\ViewProduct;
+use App\Filament\Resources\Products\RelationManagers\ProductPricesRelationManager;
 use App\Filament\Resources\Products\Schemas\ProductForm;
 use App\Filament\Resources\Products\Schemas\ProductInfolist;
 use App\Filament\Resources\Products\Tables\ProductsTable;
@@ -33,17 +34,17 @@ class ProductResource extends Resource
     {
         return Auth::user()->can('view_transaction');
     }
- 
+
     public static function canCreate(): bool
     {
         return Auth::user()->can('create_transaction');
     }
- 
+
     public static function canEdit($record): bool
     {
         return Auth::user()->can('edit_transaction');
     }
- 
+
     public static function canDelete($record): bool
     {
         return Auth::user()->can('delete_transaction');
@@ -67,7 +68,7 @@ class ProductResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            ProductPricesRelationManager::class,
         ];
     }
 

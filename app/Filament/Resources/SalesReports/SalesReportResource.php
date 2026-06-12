@@ -23,6 +23,12 @@ class SalesReportResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Laporan';
 
+    protected static ?string $modelLabel = 'Laporan Penjualan';
+
+    protected static ?string $pluralModelLabel = 'Laporan Penjualan';
+
+    protected static ?string $slug = 'laporan-penjualan';
+
     protected static ?int $navigationSort = 1;
 
     public static function canCreate(): bool

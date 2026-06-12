@@ -23,6 +23,7 @@ use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Torgodly\Html2Media\Actions\Html2MediaAction;
 // use Filament\Tables\Table as FilamentTable;
 
 class DeliveriesTable
@@ -262,11 +263,42 @@ class DeliveriesTable
                         }
                     }),
 
-                Action::make('print_surat_jalan')
+                // Html2MediaAction::make('print')
+                //     ->print()
+                //     ->label('Surat Jalan')
+                //     ->preview()
+                //     ->requiresConfirmation()
+                //     ->orientation('landscape')
+                //     ->format([210, 140])
+                //     ->margins(0)
+                //     ->filename(fn(Delivery $record) => "Surat-Jalan-{$record->do_number}.pdf")
+                //     ->savePdf()
+                //     ->showPageNumbers(false)
+                //     ->overflow('cut')
+                //     // ->selector('#surat-jalan-content')
+                //     ->content(fn($record) => view(
+                //         'preview.surat-jalan',
+                //         [
+                //             'delivery' => $record->load([
+                //                 'transaction.customer',
+                //                 'transaction.payments.paymentMethod',
+                //                 'items.product.unit',
+                //                 'items.transactionItem',
+                //                 'user',
+                //             ]),
+                //         ]
+                //     )),
+                // // Action::make('print_surat_jalan')
+                // //     ->label('Cetak Surat Jalan')
+                // //     ->icon('heroicon-o-arrow-down-tray')
+                // //     ->color('danger')
+                // //     ->url(fn(Delivery $record) => route('delivery.surat-jalan', $record) . '?pdf=1')
+                // //     ->openUrlInNewTab(),
+                Action::make('print')
                     ->label('Surat Jalan')
-                    ->icon('heroicon-o-document-text')
-                    ->color('gray')
-                    ->url(fn(Delivery $record) => route('delivery.surat-jalan', $record))
+                    ->icon('heroicon-o-printer')
+                    ->color('warning')
+                    ->url(fn($record) => route('surat-jalan.print', $record->id))
                     ->openUrlInNewTab(),
 
                 ViewAction::make(),

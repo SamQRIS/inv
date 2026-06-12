@@ -11,7 +11,8 @@
         "filament/filament": "^5.6",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
-        "spatie/laravel-permission": "^7.4"
+        "spatie/laravel-permission": "^7.4",
+        "torgodly/html2media": "^2.1"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

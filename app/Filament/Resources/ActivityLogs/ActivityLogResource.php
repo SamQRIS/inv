@@ -31,6 +31,12 @@ class ActivityLogResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
+    protected static ?string $modelLabel = 'Log Aktivitas';
+
+    protected static ?string $pluralModelLabel = 'Log Aktivitas';
+
+    protected static ?string $slug = 'log-aktivitas';
+
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
         return parent::getEloquentQuery()

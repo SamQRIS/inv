@@ -144,7 +144,7 @@ class TransactionService
     private function resolveCustomer(array $data): ?Customer
     {
         if (($data['customer_type'] ?? '') === 'end_user') {
-            return Customer::findOrCreateEndUser($data['customer_name'], $data['customer_phone'] ?? null);
+            return Customer::findOrCreateEndUser($data['customer_name'], $data['customer_phone'], $data['customer_address'] ?? null);
         }
         if (!empty($data['customer_id'])) {
             return Customer::findOrFail($data['customer_id']);

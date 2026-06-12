@@ -29,21 +29,27 @@ class TransactionResource extends Resource
     protected static ?string $navigationLabel = 'Penjualan';
     protected static ?int $navigationSort = 1;
 
+    protected static ?string $modelLabel = 'Transaksi';
+
+    protected static ?string $pluralModelLabel = 'Transaksi';
+
+    protected static ?string $slug = 'transaksi';
+
     public static function canViewAny(): bool
     {
         return Auth::user()->can('view_transaction');
     }
- 
+
     public static function canCreate(): bool
     {
         return Auth::user()->can('create_transaction');
     }
- 
+
     public static function canEdit($record): bool
     {
         return Auth::user()->can('edit_transaction');
     }
- 
+
     public static function canDelete($record): bool
     {
         return Auth::user()->can('delete_transaction');

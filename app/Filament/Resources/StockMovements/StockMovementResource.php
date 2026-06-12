@@ -25,6 +25,12 @@ class StockMovementResource extends Resource
 
     protected static ?string $navigationLabel = 'Mutasi Stok';
 
+    protected static ?string $modelLabel='Mutasi Stok';
+
+    protected static ?string $pluralModelLabel='Mutasi Stok';
+
+    protected static ?string $slug='mutasi-stok';
+
     public static function canCreate(): bool { return false; }
     public static function canEdit($record): bool { return false; }
     public static function canDelete($record): bool { return false; }

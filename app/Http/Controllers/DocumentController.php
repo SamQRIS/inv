@@ -8,6 +8,7 @@ use App\Services\DiscountService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 
 class DocumentController extends Controller
 {
@@ -59,7 +60,7 @@ class DocumentController extends Controller
     //   height = 140 * 2.8346 = 397pt
     // =============================================
 
-    public function suratJalan(Delivery $delivery): Response
+    public function suratJalan(Request $request, Delivery $delivery)
     {
         $delivery->load([
             'transaction.customer',
@@ -69,17 +70,36 @@ class DocumentController extends Controller
             'user',
         ]);
 
-        $pdf = Pdf::loadView('pdf.surat-jalan', [
-            'delivery' => $delivery,
-        ])
-            ->setPaper([0, 0, 683, 397])
-            ->setOptions([
-                'defaultFont'          => 'Arial',
-                'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled'      => false,
-                'dpi'                  => 72,
-            ]);
+        if ($request->boolean('pdf')) {
 
-        return $pdf->download("SuratJalan-{$delivery->do_number}.pdf");
+            $pdf = Pdf::loadView('pdf.surat-jalan', [
+                'delivery' => $delivery,
+            ])
+                ->setPaper([0, 0, 683, 397])
+                ->setOptions([
+                    'defaultFont'          => 'Arial',
+                    'isHtml5ParserEnabled' => true,
+                    'isRemoteEnabled'      => false,
+                    'dpi'                  => 72,
+                ]);
+
+            return $pdf->download("SuratJalan-{$delivery->do_number}.pdf");
+        }
+
+        return view('print.surat-jalan', [
+            'delivery' => $delivery,
+        ]);
+    }
+
+    public function printQzTray(Delivery $delivery)
+    {
+        $delivery->load([
+            'transaction.customer',
+            'transaction.payments',
+            'items.product.unit',
+            'user',
+        ]);
+ 
+        return view('print.surat-jalan-qztray', compact('delivery'));
     }
 }

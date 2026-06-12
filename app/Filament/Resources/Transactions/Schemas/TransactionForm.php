@@ -36,282 +36,367 @@ class TransactionForm
                 Grid::make(5)->schema([
 
                     // ── Kolom Kiri (span 2) ──────────────────────────────
-                    Group::make()->columnSpan(4)->schema([
+                    Group::make()->columnSpan(4)
+                        ->schema([
 
-                        Section::make()
-                            ->columns(3)
-                            ->schema([
-                                TextInput::make('invoice_number')
-                                    ->label('No. Nota / Invoice')
-                                    // ->default(fn() => Transaction::generateInvoiceNumber())
-                                    ->required()
-                                    ->unique(Transaction::class, 'invoice_number', ignoreRecord: true)
-                                    ->placeholder('Contoh: A090001')
-                                    ->prefixIcon('heroicon-m-document-text')
-                                    ->dehydrated(), // ← pastikan ikut di-submit
-                                // TextInput::make('invoice_number')
-                                //     ->label('No. Invoice')
-                                //     ->default(fn() => Transaction::generateInvoiceNumber())
-                                //     ->disabled()
-                                //     ->dehydrated()
-                                //     ->prefixIcon('heroicon-m-document-text'),
+                            Section::make()
+                                ->columns(3)
+                                ->schema([
+                                    TextInput::make('invoice_number')
+                                        ->label('No. Nota / Invoice')
+                                        // ->default(fn() => Transaction::generateInvoiceNumber())
+                                        ->required()
+                                        ->unique(Transaction::class, 'invoice_number', ignoreRecord: true)
+                                        ->placeholder('Contoh: A090001')
+                                        ->prefixIcon('heroicon-m-document-text')
+                                        ->dehydrated(), // ← pastikan ikut di-submit
+                                    // TextInput::make('invoice_number')
+                                    //     ->label('No. Invoice')
+                                    //     ->default(fn() => Transaction::generateInvoiceNumber())
+                                    //     ->disabled()
+                                    //     ->dehydrated()
+                                    //     ->prefixIcon('heroicon-m-document-text'),
 
-                                DatePicker::make('transaction_date')
-                                    ->label('Tanggal Transaksi')
-                                    ->default(today())
-                                    ->required()
-                                    ->native(false)
-                                    ->displayFormat('d/m/Y'),
+                                    DatePicker::make('transaction_date')
+                                        ->label('Tanggal Transaksi')
+                                        ->default(today())
+                                        ->required()
+                                        ->native(false)
+                                        ->displayFormat('d/m/Y'),
 
-                                Select::make('customer_id')
-                                    ->label('Customer DO / Tempo')
-                                    ->options(Customer::where('type', 'do')->where('is_active', true)->pluck('name', 'id'))
-                                    ->searchable()
-                                    ->preload()
-                                    ->nullable()
-                                    ->placeholder('— Pilih customer DO —')
-                                    ->live()
-                                    ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                                        if ($state) {
-                                            $customer = Customer::find($state);
-                                            if ($customer?->default_discount) {
-                                                $set('discount_json', $customer->default_discount);
+                                    Select::make('customer_id')
+                                        ->label('Customer DO / Tempo')
+                                        ->options(Customer::where('type', 'do')->where('is_active', true)->pluck('name', 'id'))
+                                        ->searchable()
+                                        ->preload()
+                                        ->nullable()
+                                        ->placeholder('— Pilih customer DO —')
+                                        ->live()
+                                        ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                                            if ($state) {
+                                                $customer = Customer::find($state);
+                                                if ($customer?->default_discount) {
+                                                    $set('discount_json', $customer->default_discount);
+                                                }
                                             }
-                                        }
-                                        self::recalculate($get, $set);
-                                    }),
-                            ]),
+                                            self::recalculate($get, $set);
+                                        }),
+                                ]),
 
-                        Section::make('Customer End User')
-                            ->columns(2)
-                            ->schema([
-                                TextInput::make('end_user_name')
-                                    ->label('Nama End User')
-                                    ->placeholder('Nama pembeli'),
-                                TextInput::make('end_user_phone')
-                                    ->label('No. HP')->tel(),
-                                Textarea::make('end_user_address')
-                                    ->label('Alamat')
-                                    ->placeholder('Alamat lengkap customer')
-                                    ->columnSpanFull(),
-                            ])
-                            ->visible(fn(Get $get) => !$get('customer_id')),
+                            Section::make('Customer End User')
+                                ->columns(2)
+                                ->schema([
+                                    TextInput::make('end_user_name')
+                                        ->label('Nama End User')
+                                        ->placeholder('Nama pembeli'),
+                                    TextInput::make('end_user_phone')
+                                        ->label('No. HP')->tel(),
+                                    Textarea::make('end_user_address')
+                                        ->label('Alamat')
+                                        ->placeholder('Alamat lengkap customer')
+                                        ->columnSpanFull(),
+                                ])
+                                ->visible(fn(Get $get) => !$get('customer_id')),
 
-                        Section::make('Jadwal Pengiriman')
-                            ->columns(12)
-                            ->collapsed()
-                            ->schema([
-                                Radio::make('delivery_date_type')
-                                    ->label('Tipe')
-                                    ->options([
-                                        'none' => 'Belum Ditentukan',
-                                        'date' => 'Tanggal Pasti',
-                                        'text' => 'Teks Bebas',
-                                    ])
-                                    ->default('none')
-                                    ->inline()
-                                    ->live()
-                                    ->columnSpan(12),
+                            Section::make('Jadwal Pengiriman')
+                                ->columns(12)
+                                ->collapsed()
+                                ->schema([
+                                    Radio::make('delivery_date_type')
+                                        ->label('Tipe')
+                                        ->options([
+                                            'none' => 'Belum Ditentukan',
+                                            'date' => 'Tanggal Pasti',
+                                            'text' => 'Teks Bebas',
+                                        ])
+                                        ->default('none')
+                                        ->inline()
+                                        ->live()
+                                        ->columnSpan(12),
 
-                                DatePicker::make('delivery_date')
-                                    ->label('Tanggal Kirim')
-                                    ->native(false)->displayFormat('d/m/Y')
-                                    ->visible(fn(Get $get) => $get('delivery_date_type') === 'date')
-                                    ->required(fn(Get $get) => $get('delivery_date_type') === 'date')
-                                    ->columnSpan(6),
+                                    DatePicker::make('delivery_date')
+                                        ->label('Tanggal Kirim')
+                                        ->native(false)->displayFormat('d/m/Y')
+                                        ->visible(fn(Get $get) => $get('delivery_date_type') === 'date')
+                                        ->required(fn(Get $get) => $get('delivery_date_type') === 'date')
+                                        ->columnSpan(6),
 
-                                TextInput::make('delivery_note')
-                                    ->label('Keterangan Kirim')
-                                    ->placeholder('Contoh: kirim bertahap, urgent, dll')
-                                    ->visible(fn(Get $get) => $get('delivery_date_type') === 'text')
-                                    ->required(fn(Get $get) => $get('delivery_date_type') === 'text')
-                                    ->columnSpan(8),
-                            ]),
+                                    TextInput::make('delivery_note')
+                                        ->label('Keterangan Kirim')
+                                        ->placeholder('Contoh: kirim bertahap, urgent, dll')
+                                        ->visible(fn(Get $get) => $get('delivery_date_type') === 'text')
+                                        ->required(fn(Get $get) => $get('delivery_date_type') === 'text')
+                                        ->columnSpan(8),
+                                ]),
 
-                        Section::make('Item Pesanan')
-                            ->schema([
-                                Repeater::make('items')
-                                    ->table([
-                                        TableColumn::make('Nama Produk'),
-                                        TableColumn::make('Qty')
-                                            ->width('100px'),
-                                        TableColumn::make('Satuan')
-                                            ->width('100px'),
-                                        TableColumn::make('Harga Satuan')
-                                            ->width('200px'),
-                                        TableColumn::make('Subtotal')
-                                            ->width('200px')
-                                    ])
-                                    ->label('')
-                                    ->schema([
-                                        Select::make('product_id')
-                                            // ->label('Produk')
-                                            ->options(
-                                                Product::where('is_active', true)
-                                                    ->with(['unit', 'category'])
-                                                    ->get()
-                                                    ->mapWithKeys(fn($p) => [
-                                                        $p->id => "[{$p->category->name}] {$p->name} — Stok: {$p->stock_quantity} {$p->unit->symbol}",
-                                                    ])
+                            Section::make('Item Pesanan')
+                                ->schema([
+                                    Repeater::make('items')
+                                        ->table([
+                                            TableColumn::make('Produk')->width('220px'),
+                                            TableColumn::make('Ukuran')->width('90px'),
+                                            TableColumn::make('Kain')->width('100px'),
+                                            TableColumn::make('Warna')->width('100px'),
+                                            TableColumn::make('Qty')->width('70px'),
+                                            TableColumn::make('Harga Satuan')->width('160px'),
+                                            TableColumn::make('Subtotal')->width('160px'),
+                                        ])
+                                        ->label('')
+                                        ->schema([
+
+                                            // ── PILIH PRODUK ──────────────────────────────────────
+                                            Select::make('product_id')
+                                                ->options(
+                                                    \App\Models\Product::where('is_active', true)
+                                                        ->with('category')
+                                                        ->get()
+                                                        ->mapWithKeys(fn($p) => [
+                                                            $p->id => "[{$p->category->name}] {$p->name}",
+                                                        ])
+                                                )
+                                                ->searchable()
+                                                ->nullable()
+                                                ->placeholder('— Pilih produk —')
+                                                ->live()
+                                                ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                                                    if (!$state) {
+                                                        // Reset semua field variasi
+                                                        $set('size_id',    null);
+                                                        $set('fabric_id',  null);
+                                                        $set('color_id',   null);
+                                                        $set('unit_price', null);
+                                                        $set('unit_name',  'PCS');
+                                                        $set('product_name', null);
+                                                        return;
+                                                    }
+
+                                                    $product = \App\Models\Product::with('unit')->find($state);
+                                                    if (!$product) return;
+
+                                                    $set('unit_name', $product->unit->symbol ?? 'PCS');
+                                                    $set('size_id',   null);
+                                                    $set('fabric_id', null);
+                                                    $set('color_id',  null);
+
+                                                    // Kalau flat: langsung isi harga & nama
+                                                    if ($product->product_type === 'flat') {
+                                                        $set('unit_price',   $product->selling_price > 0 ? $product->selling_price : null);
+                                                        $set('product_name', $product->name);
+                                                        $qty = (int) ($get('quantity') ?? 1);
+                                                        $set('line_subtotal', $qty * (float) ($product->selling_price ?? 0));
+                                                        self::recalculate($get, $set);
+                                                    } else {
+                                                        // Divan/kasur: tunggu pilih ukuran dulu
+                                                        $set('unit_price',   null);
+                                                        $set('product_name', $product->name);
+                                                    }
+                                                }),
+
+                                            // ── UKURAN (muncul jika divan/kasur) ─────────────────
+                                            Select::make('size_id')
+                                                ->options(
+                                                    \App\Models\ProductSize::where('is_active', true)
+                                                        ->orderBy('sort_order')
+                                                        ->pluck('name', 'id')
+                                                )
+                                                ->nullable()
+                                                ->placeholder('Ukuran')
+                                                ->visible(function (Get $get) {
+                                                    $id = $get('product_id');
+                                                    if (!$id) return false;
+                                                    $p = \App\Models\Product::find($id);
+                                                    return $p && in_array($p->product_type, ['divan', 'kasur']);
+                                                })
+                                                ->live()
+                                                ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                                                    self::updatePriceAndName($get, $set);
+                                                }),
+
+                                            // ── JENIS KAIN (muncul jika divan) ────────────────────
+                                            Select::make('fabric_id')
+                                                ->options(
+                                                    \App\Models\ProductFabric::where('is_active', true)
+                                                        ->orderBy('sort_order')->pluck('name', 'id')
+                                                )
+                                                ->nullable()
+                                                ->placeholder('Jenis Kain')
+                                                ->searchable()
+                                                ->createOptionForm([
+                                                    TextInput::make('name')
+                                                        ->label('Nama Kain Baru')
+                                                        ->required()
+                                                        ->placeholder('Contoh: Velvet, Kanvas'),
+                                                ])
+                                                ->createOptionUsing(function (array $data) {
+                                                    return \App\Models\ProductFabric::create([
+                                                        'name'       => strtoupper($data['name']),
+                                                        'is_active'  => true,
+                                                        'sort_order' => \App\Models\ProductFabric::max('sort_order') + 1,
+                                                    ])->id;
+                                                })
+                                                ->live()
+                                                ->afterStateUpdated(fn(Get $get, Set $set) => self::updatePriceAndName($get, $set)),
+
+                                            // ── WARNA (muncul jika divan/kasur) ─────────────────
+                                            Select::make('color_id')
+                                                ->options(
+                                                    \App\Models\ProductColor::where('is_active', true)
+                                                        ->orderBy('sort_order')->pluck('name', 'id')
+                                                )
+                                                ->nullable()
+                                                ->placeholder('Warna')
+                                                ->searchable()
+                                                ->createOptionForm([
+                                                    TextInput::make('name')
+                                                        ->label('Nama Warna Baru')
+                                                        ->required()
+                                                        ->placeholder('Contoh: TOSCA, SALEM'),
+                                                ])
+                                                ->createOptionUsing(function (array $data) {
+                                                    return \App\Models\ProductColor::create([
+                                                        'name'       => strtoupper($data['name']),
+                                                        'is_active'  => true,
+                                                        'sort_order' => \App\Models\ProductColor::max('sort_order') + 1,
+                                                    ])->id;
+                                                })
+                                                ->live()
+                                                ->afterStateUpdated(fn(Get $get, Set $set) => self::updatePriceAndName($get, $set)),
+
+                                            // ── QTY ───────────────────────────────────────────────
+                                            TextInput::make('quantity')
+                                                ->numeric()->minValue(1)->default(1)->required()
+                                                ->live(debounce: 400)
+                                                ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                                                    $set('line_subtotal', (int)($state ?? 0) * (float)($get('unit_price') ?? 0));
+                                                    self::recalculate($get, $set);
+                                                }),
+
+                                            // ── HARGA (auto dari price table, bisa edit manual) ───
+                                            TextInput::make('unit_price')
+                                                ->numeric()->prefix('Rp')
+                                                ->placeholder('Harga satuan')
+                                                ->live(debounce: 400)
+                                                ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                                                    $set('line_subtotal', (int)($get('quantity') ?? 0) * (float)($state ?? 0));
+                                                    self::recalculate($get, $set);
+                                                }),
+
+                                            // ── SUBTOTAL (readonly) ───────────────────────────────
+                                            TextInput::make('line_subtotal')
+                                                ->prefix('Rp')->disabled()->dehydrated(false),
+
+                                            // ── HIDDEN FIELDS ─────────────────────────────────────
+                                            Hidden::make('product_name'),  // nama lengkap: "DIVAN+HB VILUMA 120 OSCAR HITAM"
+                                            Hidden::make('unit_name')->default('PCS'),
+                                        ])
+                                        ->columns(12)
+                                        ->minItems(1)
+                                        ->reorderable(false)
+                                        ->defaultItems(2)
+                                        ->addActionLabel('+ Tambah Item')
+                                        ->live()
+                                        ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
+                                        ->deleteAction(
+                                            fn(Action $action) => $action->after(
+                                                fn(Get $get, Set $set) => self::recalculate($get, $set)
                                             )
-                                            ->searchable()
-                                            ->required()
-                                            ->live()
-                                            ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                                                if (!$state) return;
-                                                $product = Product::with('unit')->find($state);
-                                                if (!$product) return;
-                                                $set('unit_price', $product->selling_price);
-                                                $set('unit_name', $product->unit->symbol);
-                                                $qty = (int) ($get('quantity') ?? 1);
-                                                $set('line_subtotal', $qty * (float) $product->selling_price);
-                                                self::recalculate($get, $set);
-                                            })
-                                            ->columnSpan(3),
+                                        ),
+                                ]),
 
-                                        TextInput::make('quantity')
-                                            // ->label('Qty')
-                                            ->numeric()->minValue(1)->default(1)->required()
-                                            ->live(debounce: 400)
-                                            ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                                                $set('line_subtotal', (int)($state ?? 0) * (float)($get('unit_price') ?? 0));
-                                                self::recalculate($get, $set);
-                                            })
-                                            ->columnSpan(2),
+                            Section::make('Diskon')
+                                ->collapsed()
+                                ->schema([
+                                    Repeater::make('discount_json')
+                                        ->table([
+                                            TableColumn::make('Tipe'),
+                                            TableColumn::make('Nilai Diskon'),
+                                            TableColumn::make('Preview')
+                                        ])
+                                        ->label('Layer Diskon')
+                                        ->helperText('Dihitung berurutan. Contoh: 5% + Rp 200.000 dari 1.000.000 → 950.000 → 750.000')
+                                        ->schema([
+                                            Select::make('type')
+                                                // ->label('Tipe')
+                                                ->options(['percent' => 'Persentase (%)', 'nominal' => 'Nominal (Rp)'])
+                                                ->live()->columnSpan(3),
 
-                                        TextInput::make('unit_name')
-                                            // ->label('Satuan')
-                                            ->disabled()->dehydrated(false)->placeholder('—'),
-                                        // ->columnSpan(2),
+                                            TextInput::make('value')
+                                                ->label(fn(Get $get) => $get('type') === 'percent' ? 'Nilai (%)' : 'Nilai (Rp)')
+                                                ->placeholder((fn(Get $get) => $get('type') === 'percent'
+                                                    ? 'Masukkan persentase (contoh: 10 untuk 10%)'
+                                                    : 'Masukkan nominal dalam Rupiah'
+                                                ))
+                                                ->numeric()->minValue(0)
+                                                ->live(debounce: 400)
+                                                ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
+                                                ->columnSpan(3),
 
-                                        TextInput::make('unit_price')
-                                            // ->label('Harga Satuan')
-                                            ->numeric()->prefix('Rp')
-                                            ->live(debounce: 400)
-                                            ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                                                $set('line_subtotal', (int)($get('quantity') ?? 0) * (float)($state ?? 0));
-                                                self::recalculate($get, $set);
-                                            })
-                                            ->columnSpan(3),
+                                            Placeholder::make('layer_label')
+                                                // ->label('Preview')
+                                                ->content(function (Get $get): string {
+                                                    $type  = $get('type');
+                                                    $value = (float) ($get('value') ?? 0);
+                                                    if (!$type || !$value) return '—';
+                                                    return $type === 'percent'
+                                                        ? "Diskon {$value}%"
+                                                        : 'Diskon Rp ' . number_format($value, 0, ',', '.');
+                                                })
+                                                ->columnSpan(6),
+                                        ])
+                                        // ->compact()
+                                        ->columns(12)->maxItems(5)
+                                        ->addActionLabel('+ Tambah Layer Diskon')
+                                        ->reorderable(false)
+                                        ->live()
+                                        ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
+                                        ->deleteAction(
+                                            fn(Action $action) => $action->after(
+                                                fn(Get $get, Set $set) => self::recalculate($get, $set)
+                                            )
+                                        ),
+                                ]),
 
-                                        TextInput::make('line_subtotal')
-                                            // ->label('Subtotal')
-                                            ->prefix('Rp')->disabled()->dehydrated(false)
-                                            ->columnSpan(3),
+                            Section::make('Catatan')
+                                ->collapsed()
+                                ->schema([
+                                    Textarea::make('notes')
+                                        ->label('')->placeholder('Catatan tambahan...')->rows(2)->columnSpanFull(),
+                                ]),
+                            Section::make('Persetujuan Admin')
+                                ->description('Tampil hanya jika deposit customer DO tidak mencukupi.')
+                                ->visible(function (Get $get) {
+                                    $customerId = $get('customer_id');
+                                    if (!$customerId) return false;
 
-                                        // TextInput::make('notes')
-                                        //     ->label('Catatan item')->placeholder('Opsional')
-                                        //     ->columnSpanFull(),
-                                    ])
-                                    ->columns(12)
-                                    ->compact()
-                                    ->minItems(1)
-                                    ->reorderable(false)
-                                    ->defaultItems(5)
-                                    ->addActionLabel('+ Tambah Item')
-                                    ->live()
-                                    ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
-                                    ->deleteAction(
-                                        fn(Action $action) => $action->after(
-                                            fn(Get $get, Set $set) => self::recalculate($get, $set)
-                                        )
-                                    ),
-                            ]),
+                                    $customer = \App\Models\Customer::find($customerId);
+                                    if (!$customer || $customer->type !== 'do') return false;
 
-                        Section::make('Diskon')
-                            ->collapsed()
-                            ->schema([
-                                Repeater::make('discount_json')
-                                    ->table([
-                                        TableColumn::make('Tipe'),
-                                        TableColumn::make('Nilai Diskon'),
-                                        TableColumn::make('Preview')
-                                    ])
-                                    ->label('Layer Diskon')
-                                    ->helperText('Dihitung berurutan. Contoh: 5% + Rp 200.000 dari 1.000.000 → 950.000 → 750.000')
-                                    ->schema([
-                                        Select::make('type')
-                                            // ->label('Tipe')
-                                            ->options(['percent' => 'Persentase (%)', 'nominal' => 'Nominal (Rp)'])
-                                            ->required()->live()->columnSpan(3),
+                                    // Hitung grand total sementara untuk cek deposit
+                                    $items    = $get('items') ?? [];
+                                    $subtotal = collect($items)->sum(fn($i) => ((float)($i['quantity'] ?? 0)) * ((float)($i['unit_price'] ?? 0)));
+                                    // Perkiraan grandTotal tanpa diskon — cukup untuk trigger warning
+                                    return $customer->depositBalance() < $subtotal;
+                                })
+                                ->schema([
+                                    Placeholder::make('deposit_warning')
+                                        ->label('')
+                                        ->content(function (Get $get) {
+                                            $customerId = $get('customer_id');
+                                            if (!$customerId) return '';
+                                            $customer = \App\Models\Customer::find($customerId);
+                                            if (!$customer) return '';
 
-                                        TextInput::make('value')
-                                            ->label(fn(Get $get) => $get('type') === 'percent' ? 'Nilai (%)' : 'Nilai (Rp)')
-                                            ->placeholder((fn(Get $get) => $get('type') === 'percent'
-                                                ? 'Masukkan persentase (contoh: 10 untuk 10%)'
-                                                : 'Masukkan nominal dalam Rupiah'
-                                            ))
-                                            ->numeric()->minValue(0)->required()
-                                            ->live(debounce: 400)
-                                            ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
-                                            ->columnSpan(3),
+                                            return '⚠ Deposit ' . $customer->name . ' tidak mencukupi. '
+                                                . 'Saldo deposit: Rp ' . number_format($customer->deposit_balance, 0, ',', '.') . '. '
+                                                . 'Centang di bawah untuk memproses order dengan persetujuan admin.';
+                                        }),
 
-                                        Placeholder::make('layer_label')
-                                            // ->label('Preview')
-                                            ->content(function (Get $get): string {
-                                                $type  = $get('type');
-                                                $value = (float) ($get('value') ?? 0);
-                                                if (!$type || !$value) return '—';
-                                                return $type === 'percent'
-                                                    ? "Diskon {$value}%"
-                                                    : 'Diskon Rp ' . number_format($value, 0, ',', '.');
-                                            })
-                                            ->columnSpan(6),
-                                    ])
-                                    // ->compact()
-                                    ->columns(12)->maxItems(5)
-                                    ->addActionLabel('+ Tambah Layer Diskon')
-                                    ->reorderable(false)
-                                    ->live()
-                                    ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculate($get, $set))
-                                    ->deleteAction(
-                                        fn(Action $action) => $action->after(
-                                            fn(Get $get, Set $set) => self::recalculate($get, $set)
-                                        )
-                                    ),
-                            ]),
-
-                        Section::make('Catatan')
-                            ->collapsed()
-                            ->schema([
-                                Textarea::make('notes')
-                                    ->label('')->placeholder('Catatan tambahan...')->rows(2)->columnSpanFull(),
-                            ]),
-                        Section::make('Persetujuan Admin')
-                            ->description('Tampil hanya jika deposit customer DO tidak mencukupi.')
-                            ->visible(function (Get $get) {
-                                $customerId = $get('customer_id');
-                                if (!$customerId) return false;
-
-                                $customer = \App\Models\Customer::find($customerId);
-                                if (!$customer || $customer->type !== 'do') return false;
-
-                                // Hitung grand total sementara untuk cek deposit
-                                $items    = $get('items') ?? [];
-                                $subtotal = collect($items)->sum(fn($i) => ((float)($i['quantity'] ?? 0)) * ((float)($i['unit_price'] ?? 0)));
-                                // Perkiraan grandTotal tanpa diskon — cukup untuk trigger warning
-                                return $customer->depositBalance() < $subtotal;
-                            })
-                            ->schema([
-                                Placeholder::make('deposit_warning')
-                                    ->label('')
-                                    ->content(function (Get $get) {
-                                        $customerId = $get('customer_id');
-                                        if (!$customerId) return '';
-                                        $customer = \App\Models\Customer::find($customerId);
-                                        if (!$customer) return '';
-
-                                        return '⚠ Deposit ' . $customer->name . ' tidak mencukupi. '
-                                            . 'Saldo deposit: Rp ' . number_format($customer->deposit_balance, 0, ',', '.') . '. '
-                                            . 'Centang di bawah untuk memproses order dengan persetujuan admin.';
-                                    }),
-
-                                Checkbox::make('admin_override')
-                                    ->label('Saya (admin) menyetujui order ini meskipun deposit tidak mencukupi')
-                                    ->helperText('Transaksi tetap diproses. Customer wajib top up deposit segera.')
-                                    ->default(false),
-                            ])
-                    ]),
+                                    Checkbox::make('admin_override')
+                                        ->label('Saya (admin) menyetujui order ini meskipun deposit tidak mencukupi')
+                                        ->helperText('Transaksi tetap diproses. Customer wajib top up deposit segera.')
+                                        ->default(false),
+                                ])
+                        ]),
 
                     // ── Kolom Kanan: Summary + Pembayaran ────────────────
                     Group::make()->columnSpan(1)->schema([
@@ -482,4 +567,47 @@ class TransactionForm
     // {
     //     return;
     // }
+
+    private static function updatePriceAndName(Get $get, Set $set): void
+    {
+        $productId = $get('product_id');
+        $sizeId    = $get('size_id');
+        $fabricId  = $get('fabric_id');
+        $colorId   = $get('color_id');
+
+        if (!$productId) return;
+
+        $product = \App\Models\Product::with('unit')->find($productId);
+        if (!$product) return;
+
+        // ── Cari harga dari product_prices ───────────────────────
+        $price = null;
+        if ($sizeId) {
+            $price = \App\Models\ProductPrice::findPrice($productId, $sizeId, $fabricId)
+                ?? \App\Models\ProductPrice::findPrice($productId, $sizeId, null)
+                ?? $product->selling_price;
+        } else {
+            $price = $product->selling_price;
+        }
+
+        // ── Build nama produk otomatis ────────────────────────────
+        $sizeName   = $sizeId   ? \App\Models\ProductSize::find($sizeId)?->name   : null;
+        $fabricName = $fabricId ? \App\Models\ProductFabric::find($fabricId)?->name : null;
+        $colorName  = $colorId  ? \App\Models\ProductColor::find($colorId)?->name  : null;
+
+        $productName = trim(implode(' ', array_filter([
+            $product->name,
+            $sizeName,
+            $fabricName,
+            $colorName,
+        ])));
+
+        // ── Set ke form ───────────────────────────────────────────
+        $set('product_name',  $productName);
+        $set('unit_price',    $price > 0 ? $price : null);
+        $set('unit_name',     $product->unit->symbol ?? 'PCS');
+
+        $qty = (int) ($get('quantity') ?? 1);
+        $set('line_subtotal', $qty * (float) ($price ?? 0));
+    }
 }

@@ -28,7 +28,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
-            ->breadcrumbs(false)
+            // ->breadcrumbs(false)
             ->maxContentWidth('full')
             ->colors([
                 'primary' => Color::Amber,

@@ -17,6 +17,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 
@@ -93,7 +94,7 @@ class ProductForm
                             ]),
                         ]),
 
-                    Tabs\Tab::make('Harga')
+                    Tab::make('Harga')
                         ->icon('heroicon-m-banknotes')
                         ->schema([
                             Section::make()->columns(2)->schema([
@@ -102,6 +103,38 @@ class ProductForm
                                 TextInput::make('selling_price')
                                     ->label('Harga Jual')->numeric()->prefix('Rp')->minValue(0),
                             ]),
+
+                        ]),
+                    Tab::make('Tipe & Variasi')
+                        ->icon('heroicon-m-swatch')
+                        ->schema([
+                            Section::make()
+                                ->description('Tentukan tipe produk untuk menampilkan field variasi yang sesuai di form transaksi.')
+                                ->schema([
+                                    Select::make('product_type')
+                                        ->label('Tipe Produk')
+                                        ->options([
+                                            'divan' => '🛏 Divan / Headboard — harga per ukuran + jenis kain',
+                                            'kasur' => '🛏 Kasur — harga per ukuran saja',
+                                            'flat'  => '📦 Flat — harga tetap dari tab Harga',
+                                        ])
+                                        ->required()
+                                        ->default('flat')
+                                        ->live()
+                                        ->helperText('Divan: pilih ukuran + kain + warna | Kasur: pilih ukuran + warna | Flat: langsung pakai harga jual'),
+
+                                    Placeholder::make('info_variasi')
+                                        ->label('')
+                                        ->content(function (Get $get): string {
+                                            return match ($get('product_type')) {
+                                                'divan' => '✅ Setelah simpan, atur harga per ukuran & kain di tab Harga Variasi.',
+                                                'kasur' => '✅ Setelah simpan, atur harga per ukuran di tab Harga Variasi.',
+                                                'flat'  => '✅ Isi harga jual di tab Harga — tidak perlu atur variasi.',
+                                                default => '',
+                                            };
+                                        })
+                                        ->visible(fn(Get $get) => (bool) $get('product_type')),
+                                ]),
                         ]),
 
                     Tabs\Tab::make('Stok per Gudang')
