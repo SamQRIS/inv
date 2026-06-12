@@ -13,6 +13,9 @@ class TransactionItem extends Model
     protected $fillable = [
         'transaction_id',
         'product_id',
+        'size_id',
+        'fabric_id',
+        'color_id',
         'warehouse_id',    // ← tambah ini
         'product_name',
         'product_sku',

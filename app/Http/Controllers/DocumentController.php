@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Delivery;
+use App\Models\ProductionOrder;
 use App\Models\Transaction;
 use App\Services\DiscountService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -101,5 +102,33 @@ class DocumentController extends Controller
         ]);
  
         return view('print.surat-jalan-qztray', compact('delivery'));
+    }
+
+    // =============================================
+    // SURAT PESANAN (PRODUCTION ORDER) PDF
+    // =============================================
+
+    public function productionOrder(ProductionOrder $productionOrder): Response
+    {
+        $productionOrder->load([
+            'customer',
+            'user',
+            'items.product',
+            'items.size',
+            'items.fabric',
+            'items.color',
+        ]);
+
+        $pdf = Pdf::loadView('pdf.production-order', [
+            'order' => $productionOrder,
+        ])
+            ->setPaper('A4')
+            ->setOptions([
+                'defaultFont'          => 'Arial',
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled'      => true,
+            ]);
+
+        return $pdf->download("SuratPesanan-{$productionOrder->order_number}.pdf");
     }
 }

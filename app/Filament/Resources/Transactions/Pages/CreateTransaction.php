@@ -13,6 +13,9 @@ class CreateTransaction extends CreateRecord
 
     protected static ?string $title   = 'Transaksi Baru';
 
+    /** ID Surat Pesanan (Production Order) jika transaksi dibuat dari sana */
+    protected ?int $fromProductionOrderId = null;
+
     public function mount(): void
     {
         parent::mount();
@@ -29,6 +32,16 @@ class CreateTransaction extends CreateRecord
         ])->find($soId);
 
         if (!$so) return;
+
+        if (!$so->canCreateTransaction()) {
+            \Filament\Notifications\Notification::make()
+                ->warning()
+                ->title('Surat Pesanan ' . $so->order_number . ' sudah Selesai')
+                ->body('Item tetap dimuat sebagai referensi, tapi pastikan tidak terjadi duplikasi transaksi.')
+                ->send();
+        }
+
+        $this->fromProductionOrderId = $so->id;
 
         // Pre-fill form dari data SO
         $this->form->fill([
@@ -109,7 +122,22 @@ class CreateTransaction extends CreateRecord
             'admin_override'   => (bool) ($data['admin_override'] ?? false), // ← tambah ini
         ];
 
-        return $service->create($transactionData);
+        $transaction = $service->create($transactionData);
+
+        // Jika transaksi ini dibuat dari Surat Pesanan (Production Order),
+        // link transaksi ke surat pesanan & tandai surat pesanan selesai —
+        // dilakukan SETELAH transaksi sukses dibuat agar tidak ada status
+        // "Selesai" palsu kalau pembuatan transaksi gagal/dibatalkan.
+        if ($this->fromProductionOrderId) {
+            $transaction->update(['production_order_id' => $this->fromProductionOrderId]);
+
+            $so = \App\Models\ProductionOrder::find($this->fromProductionOrderId);
+            if ($so && $so->status !== 'done') {
+                $so->update(['status' => 'done']);
+            }
+        }
+
+        return $transaction;
     }
 
     protected function getRedirectUrl(): string

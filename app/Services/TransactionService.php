@@ -102,6 +102,9 @@ class TransactionService
                 TransactionItem::create([
                     'transaction_id' => $transaction->id,
                     'product_id'     => $product->id,
+                    'size_id'        => $item['size_id'] ?? null,
+                    'fabric_id'      => $item['fabric_id'] ?? null,
+                    'color_id'       => $item['color_id'] ?? null,
                     'warehouse_id'   => $warehouse->id,
                     'product_name'   => $product->name,
                     'product_sku'    => $product->sku,

@@ -3,13 +3,18 @@
 namespace App\Filament\Resources\ProductionOrders\Schemas;
 
 use App\Models\Customer;
+use App\Models\Product;
+use App\Models\ProductColor;
+use App\Models\ProductFabric;
 use App\Models\ProductionOrder;
+use App\Models\ProductSize;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 
@@ -85,39 +90,97 @@ class ProductionOrderForm
                 Repeater::make('items')
                     ->relationship()
                     ->table([
-                        TableColumn::make('Nama Produk'),
+                        TableColumn::make('Produk (Katalog)'),
                         TableColumn::make('Ukuran'),
+                        TableColumn::make('Kain'),
                         TableColumn::make('Warna'),
-                        TableColumn::make('Sandaran / Tipe'),
+                        TableColumn::make('Nama Produk (Cetak)'),
                         TableColumn::make('Qty')
-                        ->width('100px'),
+                            ->width('80px'),
                         TableColumn::make('Keterangan Tambahan'),
                     ])
                     ->label('Daftar Pesanan')
                     ->schema([
-                        TextInput::make('product_name')
-                            ->label('Nama Produk')
-                            ->placeholder('Contoh: DIVAN + HEADBOARD, KASUR SPRING BED')
-                            ->required()
-                            ->columnSpan(3),
+                        // ── PILIH DARI KATALOG (opsional) ─────────────────
+                        Select::make('product_id')
+                            ->label('Produk')
+                            ->options(
+                                Product::where('is_active', true)
+                                    ->with('category')
+                                    ->get()
+                                    ->mapWithKeys(fn($p) => [
+                                        $p->id => $p->category ? "[{$p->category->name}] {$p->name}" : $p->name,
+                                    ])
+                            )
+                            ->searchable()
+                            ->nullable()
+                            ->placeholder('— Custom / belum ada di katalog —')
+                            ->live()
+                            ->columnSpan(2)
+                            ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                                if (!$state) {
+                                    $set('size_id', null);
+                                    $set('fabric_id', null);
+                                    $set('color_id', null);
+                                    return;
+                                }
+                                self::updateProductName($get, $set);
+                            }),
 
-                        TextInput::make('size')
+                        // ── UKURAN (muncul jika divan/kasur) ─────────────────
+                        Select::make('size_id')
                             ->label('Ukuran')
-                            ->placeholder('120, 160, 180x200')
+                            ->options(ProductSize::where('is_active', true)->orderBy('sort_order')->pluck('name', 'id'))
                             ->nullable()
-                            ->columnSpan(1),
+                            ->placeholder('Ukuran')
+                            ->visible(function (Get $get) {
+                                $id = $get('product_id');
+                                if (!$id) return false;
+                                $p = Product::find($id);
+                                return $p && in_array($p->product_type, ['divan', 'kasur']);
+                            })
+                            ->live()
+                            ->afterStateUpdated(fn(Get $get, Set $set) => self::updateProductName($get, $set)),
 
-                        TextInput::make('color')
-                            ->label('Warna / Motif')
-                            ->placeholder('HITAM, PUTIH, BIRU')
+                        // ── JENIS KAIN (muncul jika divan) ────────────────────
+                        Select::make('fabric_id')
+                            ->label('Kain')
+                            ->options(ProductFabric::where('is_active', true)->orderBy('sort_order')->pluck('name', 'id'))
                             ->nullable()
-                            ->columnSpan(2),
+                            ->placeholder('Jenis Kain')
+                            ->searchable()
+                            ->visible(function (Get $get) {
+                                $id = $get('product_id');
+                                if (!$id) return false;
+                                $p = Product::find($id);
+                                return $p && $p->product_type === 'divan';
+                            })
+                            ->live()
+                            ->afterStateUpdated(fn(Get $get, Set $set) => self::updateProductName($get, $set)),
 
-                        TextInput::make('headboard_type')
-                            ->label('Sandaran / Tipe')
-                            ->placeholder('VILUMA, PALLADIUM')
+                        // ── WARNA (muncul jika divan/kasur) ─────────────────
+                        Select::make('color_id')
+                            ->label('Warna')
+                            ->options(ProductColor::where('is_active', true)->orderBy('sort_order')->pluck('name', 'id'))
                             ->nullable()
-                            ->columnSpan(2),
+                            ->placeholder('Warna')
+                            ->searchable()
+                            ->visible(function (Get $get) {
+                                $id = $get('product_id');
+                                if (!$id) return false;
+                                $p = Product::find($id);
+                                return $p && in_array($p->product_type, ['divan', 'kasur']);
+                            })
+                            ->live()
+                            ->afterStateUpdated(fn(Get $get, Set $set) => self::updateProductName($get, $set)),
+
+                        // ── NAMA PRODUK UNTUK CETAK ───────────────────────────
+                        TextInput::make('product_name')
+                            ->label('Nama Produk (Cetak)')
+                            ->placeholder('Contoh: DIVAN + HEADBOARD VILUMA 160 OSCAR HITAM')
+                            ->required()
+                            ->helperText('Terisi otomatis jika pilih dari katalog, atau tulis manual untuk item custom.')
+                            ->columnSpan(3),
 
                         TextInput::make('quantity')
                             ->label('Qty')
@@ -131,7 +194,7 @@ class ProductionOrderForm
                             ->label('Keterangan Tambahan')
                             ->placeholder('URGENT, kaki chrome, dll')
                             ->nullable()
-                            ->columnSpan(3),
+                            ->columnSpan(2),
                     ])
                     ->columns(12)
                     ->minItems(1)
@@ -140,5 +203,35 @@ class ProductionOrderForm
                     ->reorderable()
                     ->columnSpanFull(),
             ]);
+    }
+
+    /**
+     * Bangun nama produk otomatis dari katalog + variasi (ukuran/kain/warna).
+     * Hanya dijalankan ketika produk dipilih dari katalog.
+     */
+    private static function updateProductName(Get $get, Set $set): void
+    {
+        $productId = $get('product_id');
+        if (!$productId) return;
+
+        $product = Product::find($productId);
+        if (!$product) return;
+
+        $sizeId   = $get('size_id');
+        $fabricId = $get('fabric_id');
+        $colorId  = $get('color_id');
+
+        $sizeName   = $sizeId   ? ProductSize::find($sizeId)?->name     : null;
+        $fabricName = $fabricId ? ProductFabric::find($fabricId)?->name : null;
+        $colorName  = $colorId  ? ProductColor::find($colorId)?->name   : null;
+
+        $productName = trim(implode(' ', array_filter([
+            $product->name,
+            $sizeName,
+            $fabricName,
+            $colorName,
+        ])));
+
+        $set('product_name', $productName);
     }
 }

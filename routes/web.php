@@ -14,9 +14,12 @@ Route::get('/login', function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/transaction/{transaction}/invoice', [DocumentController::class, 'invoice'])
         ->name('transaction.invoice');
- 
+
     Route::get('/delivery/{delivery}/surat-jalan', [DocumentController::class, 'suratJalan'])
         ->name('delivery.surat-jalan');
+
+    Route::get('/production-order/{productionOrder}/print', [DocumentController::class, 'productionOrder'])
+        ->name('production-order.print');
 });
 
 Route::get('/delivery/{delivery}/print', function ($delivery) {

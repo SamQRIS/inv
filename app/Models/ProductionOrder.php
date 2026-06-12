@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Customer;
 use App\Models\ProductionOrderItem;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -34,6 +35,11 @@ class ProductionOrder extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(Transaction::class, 'production_order_id');
     }
 
     public function user(): BelongsTo
@@ -67,14 +73,27 @@ class ProductionOrder extends Model
         return sprintf('ORD-%s-%03d', $date, $seq);
     }
 
+    public function statusColor(): string
+    {
+        return match ($this->status) {
+            'draft' => 'gray',
+            'pending' => 'warning',
+            'in_progress' => 'info',
+            'completed' => 'success',
+            'cancelled' => 'danger',
+            default => 'gray',
+        };
+    }
+
     public function statusLabel(): string
     {
         return match ($this->status) {
-            'draft'         => 'Draft',
-            'confirmed'     => 'Dikonfirmasi',
-            'in_production' => 'Dalam Produksi',
-            'done'          => 'Selesai',
-            default         => $this->status,
+            'draft' => 'Draft',
+            'pending' => 'Menunggu Produksi',
+            'in_progress' => 'Sedang Diproduksi',
+            'completed' => 'Selesai',
+            'cancelled' => 'Dibatalkan',
+            default => ucfirst($this->status),
         };
     }
 }

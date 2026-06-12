@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Customer;
 use App\Models\Delivery;
 use App\Models\Payment;
+use App\Models\ProductionOrder;
 use App\Models\TransactionItem;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -21,6 +22,7 @@ class Transaction extends Model
     protected $fillable = [
         'invoice_number',
         'customer_id',
+        'production_order_id',
         'user_id',
         'transaction_date',
         'delivery_date',
@@ -55,6 +57,11 @@ class Transaction extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function productionOrder(): BelongsTo
+    {
+        return $this->belongsTo(ProductionOrder::class);
     }
 
     public function user(): BelongsTo

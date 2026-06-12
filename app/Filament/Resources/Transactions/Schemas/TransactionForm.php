@@ -133,13 +133,13 @@ class TransactionForm
                                 ->schema([
                                     Repeater::make('items')
                                         ->table([
-                                            TableColumn::make('Produk')->width('220px'),
-                                            TableColumn::make('Ukuran')->width('90px'),
+                                            TableColumn::make('Produk')->width('200px'),
+                                            TableColumn::make('Ukuran')->width('100px'),
                                             TableColumn::make('Kain')->width('100px'),
                                             TableColumn::make('Warna')->width('100px'),
                                             TableColumn::make('Qty')->width('70px'),
-                                            TableColumn::make('Harga Satuan')->width('160px'),
-                                            TableColumn::make('Subtotal')->width('160px'),
+                                            TableColumn::make('Harga Satuan')->width('100px'),
+                                            TableColumn::make('Subtotal')->width('100px'),
                                         ])
                                         ->label('')
                                         ->schema([
@@ -219,7 +219,7 @@ class TransactionForm
                                                         ->orderBy('sort_order')->pluck('name', 'id')
                                                 )
                                                 ->nullable()
-                                                ->placeholder('Jenis Kain')
+                                                ->placeholder('Kain')
                                                 ->searchable()
                                                 ->createOptionForm([
                                                     TextInput::make('name')
